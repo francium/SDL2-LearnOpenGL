@@ -52,5 +52,5 @@ run: bin/main
 watch:
 	@while ,watchdo .watchfile; do\
 		clear;\
-		make -B all;\
+		make all;\
 	done
