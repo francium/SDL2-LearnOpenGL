@@ -1,15 +1,7 @@
 CXX = g++
 CXX_FLAGS =
-
-
-SRCS = main.cpp
-OUT_NAME = main
-OUT = -o $(OUT_NAME)
 LIBS =
 INCLUDES =
-
-
-# Debug
 CXX_FLAGS += -g -O0
 
 
@@ -18,13 +10,47 @@ LIBS += $$(sdl2-config --libs --cflags)
 
 
 ## GLAD
-SRCS += lib/glad/src/glad.c
 INCLUDES = -Ilib/glad/include
 LIBS += -ldl
+
+
+COMPILE = $(CXX) $(CXX_FLAGS) $(LIBS) $(INCLUDES)
 
 
 # TARGETS #####################################################################
 
 
-$(OUT_NAME): $(SRCS)
-	$(CXX) $(CXX_FLAGS) $(LIBS) $(INCLUDES) $(OUT) $(SRCS)
+all: bin/ bin/main
+
+
+bin/main: bin/glad.o bin/main.o
+	$(COMPILE) -o $@ $^
+
+
+bin/glad.o: lib/glad/src/glad.c
+	$(COMPILE) -c -o $@ $^
+
+
+bin/main.o: src/main.cpp
+	$(COMPILE) -c -o $@ $^
+
+
+bin/:
+	@mkdir -p bin
+
+
+.PHONY: clean
+clean:
+	rm -rf bin/
+
+
+.PHONY: run
+run: bin/main
+	bin/main
+
+
+watch:
+	@while ,watchdo .watchfile; do\
+		clear;\
+		make -B all;\
+	done
