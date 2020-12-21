@@ -1,7 +1,8 @@
 #include <stdio.h>
 
+#include <glad/glad.h>
 #include <SDL2/SDL.h>
-#include <GL/glew.h>
+
 
 SDL_Window    *m_window;
 SDL_GLContext  m_context;
@@ -9,6 +10,7 @@ GLuint         m_vao, m_vbo, m_ebo, m_tex;
 GLuint         m_vert_shader;
 GLuint         m_frag_shader;
 GLuint         m_shader_prog;
+
 
 int initialize()
 {
@@ -49,20 +51,17 @@ int initialize()
 
     SDL_GL_SetSwapInterval(1); // Use VSYNC
 
-    // Initialize GL Extension Wrangler (GLEW)
-    GLenum err;
-    glewExperimental = GL_TRUE; // Please expose OpenGL 3.x+ interfaces
-    err = glewInit();
-    if (err != GLEW_OK) {
-        fprintf(stderr, "Failed to init GLEW\n");
-        SDL_GL_DeleteContext(m_context);
+    int gladInitRes = gladLoadGL();
+    if (!gladInitRes) {
+        fprintf(stderr, "Unable to initialize glad\n");
         SDL_DestroyWindow(m_window);
         SDL_Quit();
-        return 1;
+        return 0;
     }
 
     return 0;
 }
+
 
 int Cleanup()
 {
@@ -80,8 +79,10 @@ int Cleanup()
     SDL_GL_DeleteContext(m_context);
     SDL_DestroyWindow(m_window);
     SDL_Quit();
+
     return 0;
 }
+
 
 int update()
 {
@@ -89,8 +90,10 @@ int update()
     glClear(GL_COLOR_BUFFER_BIT);
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, NULL);
     SDL_GL_SwapWindow(m_window);
+
     return 0;
 }
+
 
 int main(int argc, char *argv[])
 {
