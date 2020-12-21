@@ -1,39 +1,39 @@
 #include <stdio.h>
 
-#include <glad/glad.h>
 #include <SDL2/SDL.h>
+#include <glad/glad.h>
+
+#include "platform.hpp"
 
 
-SDL_Window    *m_window;
-SDL_GLContext  m_context;
-GLuint         m_vao, m_vbo, m_ebo, m_tex;
-GLuint         m_vert_shader;
-GLuint         m_frag_shader;
-GLuint         m_shader_prog;
-
-
-int initialize()
+struct App
 {
-    // Initialize SDL Video
-    if (SDL_Init(SDL_INIT_VIDEO) < 0) {
-        fprintf(stderr, "Failed to initialize SDL video\n");
-        return 1;
-    }
+    SDL_Window    *window;
+    SDL_GLContext  context;
+    GLuint         vao,
+                   vbo,
+                   ebo,
+                   tex;
+    GLuint         vert_shader;
+    GLuint         frag_shader;
+    GLuint         shader_prog;
+};
 
-    // Create main window
-    m_window = SDL_CreateWindow(
-        "SDL App",
-        SDL_WINDOWPOS_CENTERED,
-        SDL_WINDOWPOS_CENTERED,
-        640, 480,
-        SDL_WINDOW_OPENGL);
-    if (m_window == NULL) {
-        fprintf(stderr, "Failed to create main window\n");
-        SDL_Quit();
-        return 1;
-    }
 
-    // Initialize rendering context
+void log(const char *msg)
+{
+    printf(msg);
+}
+
+
+void log_err(const char *msg)
+{
+    fprintf(stderr, msg);
+}
+
+
+bool init_rendering_context(App *app)
+{
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
     SDL_GL_SetAttribute(
@@ -43,72 +43,118 @@ int initialize()
 
     SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
 
-    m_context = SDL_GL_CreateContext(m_window);
-    if (m_context == NULL) {
-        fprintf(stderr, "Failed to create GL context\n");
-        SDL_DestroyWindow(m_window);
+    app->context = SDL_GL_CreateContext(app->window);
+    if (app->context == NULL)
+    {
+        log_err("Failed to create GL context\n");
+        SDL_DestroyWindow(app->window);
         SDL_Quit();
-        return 1;
+        return false;
     }
 
     SDL_GL_SetSwapInterval(1); // Use VSYNC
 
-    int gladInitRes = gladLoadGL();
-    if (!gladInitRes) {
-        fprintf(stderr, "Unable to initialize glad\n");
-        SDL_DestroyWindow(m_window);
-        SDL_Quit();
-        return 0;
-    }
-
-    return 0;
+    return true;
 }
 
 
-int Cleanup()
+bool init_sdl(App *app)
+{
+    if (SDL_Init(SDL_INIT_VIDEO) < 0)
+    {
+        log_err("Failed to initialize SDL video\n");
+        return false;
+    }
+
+    app->window = SDL_CreateWindow(
+        "SDL App",
+        SDL_WINDOWPOS_CENTERED,
+        SDL_WINDOWPOS_CENTERED,
+        640, 480,
+        SDL_WINDOW_OPENGL);
+    if (app->window == NULL)
+    {
+        log_err("Failed to create main window\n");
+        SDL_Quit();
+        return false;
+    }
+
+    return init_rendering_context(app);
+}
+
+
+bool init_gl(App *app)
+{
+    int gladInitRes = gladLoadGL();
+    if (!gladInitRes)
+    {
+        log_err("Unable to initialize glad\n");
+        SDL_DestroyWindow(app->window);
+        SDL_Quit();
+        return false;
+    }
+
+    return true;
+}
+
+
+bool init(App *app)
+{
+    if (!init_sdl(app))
+    {
+        return false;
+    }
+
+    if (!init_gl(app))
+    {
+        return false;
+    }
+
+    return true;
+}
+
+
+void cleanup(App *app)
 {
     glUseProgram(0);
     glDisableVertexAttribArray(0);
-    glDetachShader(m_shader_prog, m_vert_shader);
-    glDetachShader(m_shader_prog, m_frag_shader);
-    glDeleteProgram(m_shader_prog);
-    glDeleteShader(m_vert_shader);
-    glDeleteShader(m_frag_shader);
-    glDeleteTextures(1, &m_tex);
-    glDeleteBuffers(1, &m_ebo);
-    glDeleteBuffers(1, &m_vbo);
-    glDeleteVertexArrays(1, &m_vao);
-    SDL_GL_DeleteContext(m_context);
-    SDL_DestroyWindow(m_window);
+    glDetachShader(app->shader_prog, app->vert_shader);
+    glDetachShader(app->shader_prog, app->frag_shader);
+    glDeleteProgram(app->shader_prog);
+    glDeleteShader(app->vert_shader);
+    glDeleteShader(app->frag_shader);
+    glDeleteTextures(1, &app->tex);
+    glDeleteBuffers(1, &app->ebo);
+    glDeleteBuffers(1, &app->vbo);
+    glDeleteVertexArrays(1, &app->vao);
+    SDL_GL_DeleteContext(app->context);
+    SDL_DestroyWindow(app->window);
     SDL_Quit();
-
-    return 0;
 }
 
 
-int update()
+void update(App *app)
 {
-    glClearColor(1.0f, 0.0f, 0.0f, 1.0f);
+    glClearColor(0.3f, 0.3f, 0.3f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
-    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, NULL);
-    SDL_GL_SwapWindow(m_window);
-
-    return 0;
+    SDL_GL_SwapWindow(app->window);
 }
 
 
 int main(int argc, char *argv[])
 {
-    int should_run;
+    App app = {};
 
-    printf("Initializing...\n");
-    if (initialize())
+    log("Initializing...\n");
+    if (!init(&app))
     {
         return 1;
     }
 
-    printf("Running...\n");
-    for (should_run = 1; should_run; )
+    log("Starting...\n");
+
+    bool should_run = true;
+    while (should_run)
     {
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
@@ -120,10 +166,11 @@ int main(int argc, char *argv[])
             }
         }
 
-        update();
+        update(&app);
     }
 
-    printf("Exiting...\n");
-    Cleanup();
+    log("Exiting...\n");
+    cleanup(&app);
+
     return 0;
 }

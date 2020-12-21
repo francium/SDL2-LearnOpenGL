@@ -49,8 +49,19 @@ run: bin/main
 	bin/main
 
 
-watch:
+watch-build:
+	@clear;
+	@echo -n "Ready"
 	@while ,watchdo .watchfile; do\
 		clear;\
-		make all;\
+		make bin/main;\
+	done
+
+
+watch-run:
+	@clear;
+	@echo -n "Ready"
+	@while ,watchdo .runfile; do\
+		clear;\
+		make run;\
 	done
