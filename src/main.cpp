@@ -20,33 +20,39 @@ struct App
 
 
 const float vertices[] = {
-    0.5f, 0.5f, 0.0f,
+    0.0f, 0.5f, 0.0f,
     0.5f, -0.5f, 0.0f,
     -0.5f, -0.5f, 0.0f,
-    -0.5f, 0.5f, 0.0f,
 };
 
 const u32 indices[] = {
-    0, 1, 3, // First triangle
-    1, 2, 3, // Second triangle
+    0, 1, 2,
 };
 
 const char *vertex_shader_source = R"shader(
     #version 330 core
+
     layout (location = 0) in vec3 aPos;
+
+    out vec4 vertex_color;
+
     void main()
     {
+        vertex_color = vec4(0.0, 0.0, 1.0, 1.0);
         gl_Position = vec4(aPos.x, aPos.y, aPos.z, 1.0);
     }
 )shader";
 
 const char *fragment_shader_source = R"shader(
     #version 330 core
+
+    in vec4 vertex_color;
+
     out vec4 FragColor;
 
     void main()
     {
-        FragColor = vec4(1.0f, 0.5f, 0.2f, 1.0f);
+        FragColor = vertex_color;
     }
 )shader";
 
@@ -273,7 +279,6 @@ update(App *app)
     glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
 
-    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
     glUseProgram(app->shader_program);
     glBindVertexArray(app->vao);
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
