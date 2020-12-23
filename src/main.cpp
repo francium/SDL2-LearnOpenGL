@@ -1,5 +1,4 @@
 #include <stdio.h>
-#include <time.h>
 
 #include <SDL2/SDL.h>
 #include <glad/glad.h>
@@ -21,9 +20,9 @@ struct App
 
 
 const float vertices[] = {
-    0.0f, 0.5f, 0.0f,
-    0.5f, -0.5f, 0.0f,
-    -0.5f, -0.5f, 0.0f,
+    0.0f, 0.5f, 0.0f, 1.0f, 0.0f, 0.0f,
+    0.5f, -0.5f, 0.0f, 0.0f, 1.0f, 0.0f,
+    -0.5f, -0.5f, 0.0f, 0.0f, 0.0f, 1.0f,
 };
 
 const u32 indices[] = {
@@ -34,9 +33,13 @@ const char *vertex_shader_source = R"shader(
     #version 330 core
 
     layout (location = 0) in vec3 aPos;
+    layout (location = 1) in vec3 aColor;
+
+    out vec3 color;
 
     void main()
     {
+        color = aColor;
         gl_Position = vec4(aPos.x, aPos.y, aPos.z, 1.0);
     }
 )shader";
@@ -44,13 +47,13 @@ const char *vertex_shader_source = R"shader(
 const char *fragment_shader_source = R"shader(
     #version 330 core
 
-    uniform vec4 color;
+    in vec3 color;
 
     out vec4 FragColor;
 
     void main()
     {
-        FragColor = color;
+        FragColor = vec4(color, 1.0);
     }
 )shader";
 
@@ -252,8 +255,20 @@ init_rendering_data(App *app)
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, app->ebo);
         glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
 
-        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(f32), nullptr);
+        // Vertex position
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(f32), nullptr);
         glEnableVertexAttribArray(0);
+
+        // Vertex color
+        glVertexAttribPointer(
+            1,
+            3,
+            GL_FLOAT,
+            GL_FALSE,
+            6 * sizeof(f32),
+            (void *)(3 * sizeof(f32))
+        );
+        glEnableVertexAttribArray(1);
     }
 }
 
@@ -277,16 +292,8 @@ update(App *app)
     glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
 
-    struct timespec clock;
-    clock_gettime(CLOCK_MONOTONIC, &clock);
-    float t_ms = (f32)clock.tv_sec + clock.tv_nsec / 1e9;
-    u32 vertex_color_location = glGetUniformLocation(app->shader_program, "color");
-    f32 green_value = (sin(t_ms / 2.0f) / 4.0f) + 0.75f;
-    f32 red_value = (cos(t_ms / 2.0f) / 4.0f) + 0.75f;
-
     glUseProgram(app->shader_program);
     glBindVertexArray(app->vao);
-    glUniform4f(vertex_color_location, red_value, green_value, 0.0f, 1.0f);
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 
     SDL_GL_SwapWindow(app->window);
