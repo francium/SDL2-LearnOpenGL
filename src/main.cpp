@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <time.h>
 
 #include <SDL2/SDL.h>
 #include <glad/glad.h>
@@ -34,11 +35,8 @@ const char *vertex_shader_source = R"shader(
 
     layout (location = 0) in vec3 aPos;
 
-    out vec4 vertex_color;
-
     void main()
     {
-        vertex_color = vec4(0.0, 0.0, 1.0, 1.0);
         gl_Position = vec4(aPos.x, aPos.y, aPos.z, 1.0);
     }
 )shader";
@@ -46,13 +44,13 @@ const char *vertex_shader_source = R"shader(
 const char *fragment_shader_source = R"shader(
     #version 330 core
 
-    in vec4 vertex_color;
+    uniform vec4 color;
 
     out vec4 FragColor;
 
     void main()
     {
-        FragColor = vertex_color;
+        FragColor = color;
     }
 )shader";
 
@@ -276,11 +274,19 @@ init(App *app)
 internal void
 update(App *app)
 {
-    glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
+    glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
+
+    struct timespec clock;
+    clock_gettime(CLOCK_MONOTONIC, &clock);
+    float t_ms = (f32)clock.tv_sec + clock.tv_nsec / 1e9;
+    u32 vertex_color_location = glGetUniformLocation(app->shader_program, "color");
+    f32 green_value = (sin(t_ms / 2.0f) / 4.0f) + 0.75f;
+    f32 red_value = (cos(t_ms / 2.0f) / 4.0f) + 0.75f;
 
     glUseProgram(app->shader_program);
     glBindVertexArray(app->vao);
+    glUniform4f(vertex_color_location, red_value, green_value, 0.0f, 1.0f);
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 
     SDL_GL_SwapWindow(app->window);
