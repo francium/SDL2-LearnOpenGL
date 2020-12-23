@@ -10,7 +10,8 @@ struct App
 {
     SDL_Window    *window;
     SDL_GLContext  context;
-    GLuint         vao,
+    GLuint         ebo,
+                   vao,
                    vbo;
     GLuint         vertex_shader;
     GLuint         fragment_shader;
@@ -19,9 +20,15 @@ struct App
 
 
 const float vertices[] = {
-    -0.5f, -0.5f, 0.0f,
+    0.5f, 0.5f, 0.0f,
     0.5f, -0.5f, 0.0f,
-    0.0f, 0.5f, 0.0f,
+    -0.5f, -0.5f, 0.0f,
+    -0.5f, 0.5f, 0.0f,
+};
+
+const u32 indices[] = {
+    0, 1, 3, // First triangle
+    1, 2, 3, // Second triangle
 };
 
 const char *vertex_shader_source = R"shader(
@@ -229,16 +236,21 @@ link_shaders(App *app)
 internal void
 init_rendering_data(App *app)
 {
-    glGenBuffers(1, &app->vbo);
     glGenVertexArrays(1, &app->vao);
+    glGenBuffers(1, &app->vbo);
+    glGenBuffers(1, &app->ebo);
 
     glBindVertexArray(app->vao);
+    {
+        glBindBuffer(GL_ARRAY_BUFFER, app->vbo);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
 
-    glBindBuffer(GL_ARRAY_BUFFER, app->vbo);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, app->ebo);
+        glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
 
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(f32), nullptr);
-    glEnableVertexAttribArray(0);
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(f32), nullptr);
+        glEnableVertexAttribArray(0);
+    }
 }
 
 
@@ -263,7 +275,7 @@ update(App *app)
 
     glUseProgram(app->shader_program);
     glBindVertexArray(app->vao);
-    glDrawArrays(GL_TRIANGLES, 0, 3);
+    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 
     SDL_GL_SwapWindow(app->window);
 }
