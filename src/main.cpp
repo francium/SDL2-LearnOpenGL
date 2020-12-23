@@ -22,15 +22,17 @@ struct App
 
 
 const float vertices[] = {
-    0.5f, 0.5f, 0.0f,
+    0.0f, -0.5f, 0.0f,
     0.5f, -0.5f, 0.0f,
-    -0.5f, -0.5f, 0.0f,
+    0.5f, 0.0f, 0.0f,
+    0.0f, 0.5f, 0.0f,
     -0.5f, 0.5f, 0.0f,
+    -0.5f, 0.0f, 0.0f,
 };
 
 const u32 indices[] = {
-    0, 1, 3, // First triangle
-    1, 2, 3, // Second triangle
+    0, 1, 2, // First triangle
+    3, 4, 5, // Second triangle
 };
 
 const char *vertex_shader_source = R"shader(
