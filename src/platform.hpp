@@ -5,7 +5,7 @@
 #include <stdbool.h>
 
 
-#define static internal
+#define internal static
 
 
 typedef int8_t i8;
