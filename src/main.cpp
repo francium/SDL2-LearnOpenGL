@@ -14,8 +14,10 @@ struct App
                    vao,
                    vbo;
     GLuint         vertex_shader;
-    GLuint         fragment_shader;
-    GLuint         shader_program;
+    GLuint         fragment_shader_1;
+    GLuint         fragment_shader_2;
+    GLuint         shader_program_1;
+    GLuint         shader_program_2;
 };
 
 
@@ -40,13 +42,23 @@ const char *vertex_shader_source = R"shader(
     }
 )shader";
 
-const char *fragment_shader_source = R"shader(
+const char *fragment_shader_1_source = R"shader(
     #version 330 core
     out vec4 FragColor;
 
     void main()
     {
         FragColor = vec4(1.0f, 0.5f, 0.2f, 1.0f);
+    }
+)shader";
+
+const char *fragment_shader_2_source = R"shader(
+    #version 330 core
+    out vec4 FragColor;
+
+    void main()
+    {
+        FragColor = vec4(0.0f, 0.0f, 0.0f, 1.0f);
     }
 )shader";
 
@@ -137,7 +149,7 @@ internal void
 cleanup_shaders(App *app)
 {
     glDeleteShader(app->vertex_shader);
-    glDeleteShader(app->fragment_shader);
+    glDeleteShader(app->fragment_shader_1);
 }
 
 
@@ -146,7 +158,8 @@ cleanup_gl(App *app)
 {
     glDeleteVertexArrays(1, &app->vao);
     glDeleteBuffers(1, &app->vbo);
-    glDeleteProgram(app->shader_program);
+    glDeleteProgram(app->shader_program_1);
+    glDeleteProgram(app->shader_program_2);
 }
 
 
@@ -192,8 +205,13 @@ compile_vertex_shader(App *app)
 internal bool
 compile_fragment_shader(App *app)
 {
-    app->fragment_shader = glCreateShader(GL_FRAGMENT_SHADER);
-    return compile_shader(app->fragment_shader, fragment_shader_source);
+    app->fragment_shader_1 = glCreateShader(GL_FRAGMENT_SHADER);
+    const bool result1 = compile_shader(app->fragment_shader_1, fragment_shader_1_source);
+
+    app->fragment_shader_2 = glCreateShader(GL_FRAGMENT_SHADER);
+    const bool result2 = compile_shader(app->fragment_shader_2, fragment_shader_2_source);
+
+    return result1 && result2;
 }
 
 
@@ -212,21 +230,38 @@ link_shaders(App *app)
 {
     if (!compile_shaders(app)) return false;
 
-    app->shader_program = glCreateProgram();
-    glAttachShader(app->shader_program, app->vertex_shader);
-    glAttachShader(app->shader_program, app->fragment_shader);
-    glLinkProgram(app->shader_program);
+    {
+        app->shader_program_1 = glCreateProgram();
+        glAttachShader(app->shader_program_1, app->vertex_shader);
+        glAttachShader(app->shader_program_1, app->fragment_shader_1);
+        glLinkProgram(app->shader_program_1);
 
-    GLint success;
-    glGetProgramiv(app->shader_program, GL_LINK_STATUS, &success);
-    if (!success) {
-        log_shader_link_error(app->shader_program);
-        glDeleteProgram(app->shader_program);
-        cleanup_shaders(app);
-        return false;
+        GLint success;
+        glGetProgramiv(app->shader_program_1, GL_LINK_STATUS, &success);
+        if (!success) {
+            log_shader_link_error(app->shader_program_1);
+            glDeleteProgram(app->shader_program_1);
+            cleanup_shaders(app);
+            return false;
+        }
     }
 
-    glUseProgram(app->shader_program);
+    {
+        app->shader_program_2 = glCreateProgram();
+        glAttachShader(app->shader_program_2, app->vertex_shader);
+        glAttachShader(app->shader_program_2, app->fragment_shader_2);
+        glLinkProgram(app->shader_program_2);
+
+        GLint success;
+        glGetProgramiv(app->shader_program_2, GL_LINK_STATUS, &success);
+        if (!success) {
+            log_shader_link_error(app->shader_program_2);
+            glDeleteProgram(app->shader_program_2);
+            cleanup_shaders(app);
+            return false;
+        }
+    }
+
     cleanup_shaders(app);
 
     return true;
@@ -270,13 +305,20 @@ init(App *app)
 internal void
 update(App *app)
 {
-    glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
+    glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
 
-    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-    glUseProgram(app->shader_program);
+    glUseProgram(app->shader_program_1);
     glBindVertexArray(app->vao);
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+
+    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+    {
+        glUseProgram(app->shader_program_2);
+        glBindVertexArray(app->vao);
+        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+    }
+    glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 
     SDL_GL_SwapWindow(app->window);
 }
