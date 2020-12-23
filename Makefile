@@ -10,7 +10,7 @@ LIBS += $$(sdl2-config --libs --cflags)
 
 
 ## GLAD
-INCLUDES = -Ilib/glad/include
+INCLUDES += -Ilib/glad/include
 LIBS += -ldl
 
 
