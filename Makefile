@@ -31,8 +31,9 @@ bin/glad.o: lib/glad/src/glad.c
 	$(COMPILE) -c -o $@ $^
 
 
-bin/main.o: src/main.cpp
-	$(COMPILE) -c -o $@ $^
+.PHONY: bin/main.o
+bin/main.o:
+	$(COMPILE) -c -o $@ src/main.cpp
 
 
 bin/:

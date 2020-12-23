@@ -4,6 +4,7 @@
 #include <glad/glad.h>
 
 #include "platform.hpp"
+#include "shader.hpp"
 
 
 struct App
@@ -13,9 +14,9 @@ struct App
     GLuint         ebo,
                    vao,
                    vbo;
-    GLuint         vertex_shader;
-    GLuint         fragment_shader;
-    GLuint         shader_program;
+    const char     *frag_shader_path,
+                   *vert_shader_path;
+    Shader         shader;
 };
 
 
@@ -28,34 +29,6 @@ const float vertices[] = {
 const u32 indices[] = {
     0, 1, 2,
 };
-
-const char *vertex_shader_source = R"shader(
-    #version 330 core
-
-    layout (location = 0) in vec3 aPos;
-    layout (location = 1) in vec3 aColor;
-
-    out vec3 color;
-
-    void main()
-    {
-        color = aColor;
-        gl_Position = vec4(aPos.x, aPos.y, aPos.z, 1.0);
-    }
-)shader";
-
-const char *fragment_shader_source = R"shader(
-    #version 330 core
-
-    in vec3 color;
-
-    out vec4 FragColor;
-
-    void main()
-    {
-        FragColor = vec4(color, 1.0);
-    }
-)shader";
 
 
 internal bool
@@ -123,37 +96,11 @@ init_gl(App *app)
 
 
 internal void
-log_shader_link_error(GLuint program)
-{
-    char info_log[512];
-    glGetProgramInfoLog(program, 512, nullptr, info_log);
-    fprintf(stderr, "Failed to link shaders:\n%s\n", info_log);
-}
-
-
-internal void
-log_shader_compilation_error(GLuint shader)
-{
-    char info_log[512];
-    glGetShaderInfoLog(shader, 512, nullptr, info_log);
-    fprintf(stderr, "Failed to compile shader:\n%s\n", info_log);
-}
-
-
-internal void
-cleanup_shaders(App *app)
-{
-    glDeleteShader(app->vertex_shader);
-    glDeleteShader(app->fragment_shader);
-}
-
-
-internal void
 cleanup_gl(App *app)
 {
     glDeleteVertexArrays(1, &app->vao);
     glDeleteBuffers(1, &app->vbo);
-    glDeleteProgram(app->shader_program);
+    Shader_destroy(&app->shader);
 }
 
 
@@ -171,72 +118,6 @@ cleanup(App *app)
 {
     cleanup_gl(app);
     cleanup_sdl(app);
-}
-
-
-internal bool
-compile_shader(GLuint shader, const char *source)
-{
-    glShaderSource(shader, 1, &source, nullptr);
-    glCompileShader(shader);
-
-    GLint success;
-    glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
-    if (!success) log_shader_compilation_error(shader);
-
-    return success;
-}
-
-
-internal bool
-compile_vertex_shader(App *app)
-{
-    app->vertex_shader = glCreateShader(GL_VERTEX_SHADER);
-    return compile_shader(app->vertex_shader, vertex_shader_source);
-}
-
-
-internal bool
-compile_fragment_shader(App *app)
-{
-    app->fragment_shader = glCreateShader(GL_FRAGMENT_SHADER);
-    return compile_shader(app->fragment_shader, fragment_shader_source);
-}
-
-
-internal bool
-compile_shaders(App *app)
-{
-    if (!compile_vertex_shader(app)) return false;
-    if (!compile_fragment_shader(app)) return false;
-
-    return true;
-}
-
-
-internal bool
-link_shaders(App *app)
-{
-    if (!compile_shaders(app)) return false;
-
-    app->shader_program = glCreateProgram();
-    glAttachShader(app->shader_program, app->vertex_shader);
-    glAttachShader(app->shader_program, app->fragment_shader);
-    glLinkProgram(app->shader_program);
-
-    GLint success;
-    glGetProgramiv(app->shader_program, GL_LINK_STATUS, &success);
-    if (!success) {
-        log_shader_link_error(app->shader_program);
-        glDeleteProgram(app->shader_program);
-        cleanup_shaders(app);
-        return false;
-    }
-
-    glUseProgram(app->shader_program);
-    cleanup_shaders(app);
-
-    return true;
 }
 
 
@@ -274,11 +155,25 @@ init_rendering_data(App *app)
 
 
 internal bool
+init_shaders(App *app)
+{
+    bool shader_init_ok = Shader_init(
+        &app->shader,
+        app->vert_shader_path,
+        app->frag_shader_path
+    );
+    if (!shader_init_ok) return false;
+
+    return true;
+}
+
+
+internal bool
 init(App *app)
 {
     if (!init_sdl(app)) return false;
     if (!init_gl(app)) return false;
-    if (!link_shaders(app)) return false;
+    if (!init_shaders(app)) return false;
 
     init_rendering_data(app);
 
@@ -292,7 +187,7 @@ update(App *app)
     glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
 
-    glUseProgram(app->shader_program);
+    Shader_use(&app->shader);
     glBindVertexArray(app->vao);
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 
@@ -331,7 +226,10 @@ process_events()
 
 int main(int argc, char *argv[])
 {
-    App app = {};
+    App app = {
+        .frag_shader_path = "data/shaders/frag.frag",
+        .vert_shader_path = "data/shaders/vert.vert",
+    };
 
     printf("Initializing...\n");
     if (!init(&app))
