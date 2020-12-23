@@ -7,6 +7,6 @@ out vec3 color;
 
 void main()
 {
-    color = aColor;
-    gl_Position = vec4(aPos.x, -aPos.y, aPos.z, 1.0);
+    color = aPos;
+    gl_Position = vec4(aPos.x, aPos.y, aPos.z, 1.0);
 }
