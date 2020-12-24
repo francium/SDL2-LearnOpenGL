@@ -118,3 +118,9 @@ void Shader_destroy(Shader *shader)
 {
     glDeleteProgram(shader->id);
 }
+
+
+void Shader_seti(Shader *shader, const char *name, int value)
+{
+    glUniform1i(glGetUniformLocation(shader->id, name), value);
+}

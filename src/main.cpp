@@ -2,64 +2,11 @@
 
 #include <SDL2/SDL.h>
 #include <glad/glad.h>
-#define STB_IMAGE_IMPLEMENTATION
-#include <stb/stb_image.h>
 
 #include "platform.hpp"
+#include "result.hpp"
 #include "shader.hpp"
-
-
-struct Texture
-{
-    GLuint id;
-};
-
-
-internal Result<Texture>
-Texture_load(const char *path)
-{
-    int width, height, nr_channels;
-    u8 *data = stbi_load(path, &width, &height, &nr_channels, 0);
-    if (data == nullptr)
-    {
-        return {.ok = false};
-    }
-
-    GLuint texture;
-    glGenTextures(1, &texture);
-    glBindTexture(GL_TEXTURE_2D, texture);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-
-    glTexImage2D(
-        GL_TEXTURE_2D,
-        0,
-        GL_RGB,
-        width,
-        height,
-        0,
-        GL_RGB,
-        GL_UNSIGNED_BYTE,
-        data
-    );
-    glGenerateMipmap(GL_TEXTURE_2D);
-
-    stbi_image_free(data);
-
-    return {
-        .ok = true,
-        .value = {texture},
-    };
-}
-
-
-internal void
-Texture_use(Texture *texture)
-{
-    glBindTexture(GL_TEXTURE_2D, texture->id);
-}
+#include "texture.hpp"
 
 
 struct App
@@ -71,9 +18,11 @@ struct App
                    vbo;
     const char     *frag_shader_path,
                    *vert_shader_path,
-                   *texture_path;
+                   *texture1_path,
+                   *texture2_path;
     Shader         shader;
-    Texture        texture;
+    Texture        texture1,
+                   texture2;
 };
 
 
@@ -262,18 +211,31 @@ init_shaders(App *app)
 
 
 internal bool
-load_textures(App *app)
+load_texture(const char *path, Texture *dest)
 {
-    Result<Texture> r_texture = Texture_load(app->texture_path);
-    if (!r_texture.ok)
+    Result<Texture> r_texture_1 = Texture_load(path);
+    if (!r_texture_1.ok)
     {
-        fprintf(stderr, "Failed to load textures\n");
+        fprintf(stderr, "Failed to load texture: %s\n", path);
         return false;
     }
 
-    app->texture = r_texture.value;
+    *dest = r_texture_1.value;
+    fprintf(stderr, "Loaded texture: %s\n", path);
 
-    fprintf(stderr, "Loaded textures\n");
+    return true;
+}
+
+
+internal bool
+load_textures(App *app)
+{
+    if (!load_texture(app->texture1_path, &app->texture1)) return false;
+    if (!load_texture(app->texture2_path, &app->texture2)) return false;
+
+    Shader_use(&app->shader);
+    Shader_seti(&app->shader, "texture1", 0);
+    Shader_seti(&app->shader, "texture2", 1);
 
     return true;
 }
@@ -300,7 +262,9 @@ update(App *app)
     glClear(GL_COLOR_BUFFER_BIT);
 
     Shader_use(&app->shader);
-    Texture_use(&app->texture);
+    Texture_use(&app->texture1, GL_TEXTURE0);
+    Texture_use(&app->texture2, GL_TEXTURE1);
+
     glBindVertexArray(app->vao);
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 
@@ -345,8 +309,10 @@ int main(int argc, char *argv[])
     App app = {
         .frag_shader_path = "data/shaders/frag.frag",
         .vert_shader_path = "data/shaders/vert.vert",
-        .texture_path = "data/textures/stone.jpg",
+        .texture1_path = "data/textures/stone.png",
+        .texture2_path = "data/textures/bill.png",
     };
+
     printf("Initializing...\n");
     if (!init(&app))
     {
