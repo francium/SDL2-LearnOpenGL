@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <time.h>
 
 #include <SDL2/SDL.h>
 #include <glad/glad.h>
@@ -258,6 +259,11 @@ init(App *app)
 internal void
 update(App *app)
 {
+    struct timespec clock;
+    clock_gettime(CLOCK_MONOTONIC, &clock);
+    GLuint flip_x_uniform = glGetUniformLocation(app->shader.id, "flip_x");
+    bool flip_x = clock.tv_sec % 2 == 0;
+
     glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
 
@@ -265,6 +271,7 @@ update(App *app)
     Texture_use(&app->texture1, GL_TEXTURE0);
     Texture_use(&app->texture2, GL_TEXTURE1);
 
+    glUniform1i(flip_x_uniform, flip_x);
     glBindVertexArray(app->vao);
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 
