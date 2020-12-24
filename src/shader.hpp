@@ -66,6 +66,9 @@ compile_shaders_from_files(
     fprintf(stderr, "Compiled shader: %s\n", fragment_shader_path);
     GLuint fragment_shader = fragment_shader_result.shader;
 
+    free(vertex_shader_buffer);
+    free(fragment_shader_buffer);
+
     return {true, vertex_shader, fragment_shader};
 }
 

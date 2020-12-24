@@ -14,6 +14,10 @@ INCLUDES += -Ilib/glad/include
 LIBS += -ldl
 
 
+## STB
+INCLUDES += -Ilib/stb/include
+
+
 COMPILE = $(CXX) $(CXX_FLAGS) $(LIBS) $(INCLUDES)
 
 
@@ -31,8 +35,7 @@ bin/glad.o: lib/glad/src/glad.c
 	$(COMPILE) -c -o $@ $^
 
 
-.PHONY: bin/main.o
-bin/main.o:
+bin/main.o: $(wildcard src/*)
 	$(COMPILE) -c -o $@ src/main.cpp
 
 
@@ -55,7 +58,7 @@ watch-build:
 	@echo -n "Ready"
 	@while ,watchdo .watchfile; do\
 		clear;\
-		make bin/main;\
+		time make bin/main;\
 	done
 
 

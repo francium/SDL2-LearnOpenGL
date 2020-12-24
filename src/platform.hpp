@@ -25,3 +25,11 @@ typedef size_t memory_index;
 
 typedef float f32;
 typedef double f64;
+
+
+template <class T>
+struct Result
+{
+    bool ok;
+    T value;
+};
