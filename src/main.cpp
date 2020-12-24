@@ -3,6 +3,9 @@
 
 #include <SDL2/SDL.h>
 #include <glad/glad.h>
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
 
 #include "platform.hpp"
 #include "result.hpp"
@@ -264,6 +267,7 @@ update(App *app)
     GLuint flip_x_uniform = glGetUniformLocation(app->shader.id, "flip_x");
     bool flip_x = clock.tv_sec % 2 == 0;
 
+
     glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
 
@@ -272,8 +276,28 @@ update(App *app)
     Texture_use(&app->texture2, GL_TEXTURE1);
 
     glUniform1i(flip_x_uniform, flip_x);
+
     glBindVertexArray(app->vao);
-    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+
+    f32 rotation = 100 * ((f32)clock.tv_sec + (f32)clock.tv_nsec / 1e9);
+    {
+        glm::mat4 trans = glm::mat4(1.0f);
+        trans = glm::translate(trans, glm::vec3(0.5f, -0.5f, 0.0f));
+        trans = glm::rotate(trans, glm::radians(rotation), glm::vec3(0.0, 0.0, 1.0));
+        trans = glm::scale(trans, glm::vec3(0.5f, 0.5f, 0.5f));
+        GLuint transform_uniform = glGetUniformLocation(app->shader.id, "transform");
+        glUniformMatrix4fv(transform_uniform, 1, GL_FALSE, glm::value_ptr(trans));
+        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+    }
+    {
+        glm::mat4 trans = glm::mat4(1.0f);
+        trans = glm::translate(trans, glm::vec3(-0.5f, 0.5f, 0.0f));
+        trans = glm::rotate(trans, glm::radians(-rotation), glm::vec3(0.0, 0.0, 1.0));
+        trans = glm::scale(trans, glm::vec3(0.5f, 0.5f, 0.5f));
+        GLuint transform_uniform = glGetUniformLocation(app->shader.id, "transform");
+        glUniformMatrix4fv(transform_uniform, 1, GL_FALSE, glm::value_ptr(trans));
+        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+    }
 
     SDL_GL_SwapWindow(app->window);
 }

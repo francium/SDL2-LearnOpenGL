@@ -14,6 +14,10 @@ INCLUDES += -Ilib/glad/include
 LIBS += -ldl
 
 
+## GLM
+INCLUDES += -Ilib/glm
+
+
 ## STB
 INCLUDES += -Ilib/stb/include
 
