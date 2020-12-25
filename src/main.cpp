@@ -243,8 +243,6 @@ load_textures(App *app)
     if (!load_texture(app->texture2_path, &app->texture2)) return false;
 
     Shader_use(&app->shader);
-    Shader_seti(&app->shader, "texture1", 0);
-    Shader_seti(&app->shader, "texture2", 1);
 
     return true;
 }
@@ -270,25 +268,15 @@ update(App *app)
     struct timespec clock;
     clock_gettime(CLOCK_MONOTONIC, &clock);
 
-    glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
+    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     Shader_use(&app->shader);
-    Texture_use(&app->texture1, GL_TEXTURE0);
-    Texture_use(&app->texture2, GL_TEXTURE1);
 
     glBindVertexArray(app->vao);
 
     f32 t = (f32)clock.tv_sec + (f32)clock.tv_nsec / 1e9;
-
-    // Isometric projection requires 45deg rotation about the y axis and
-    // ~35.264deg rotation about the x
-    glm::mat4 model_matrix = glm::mat4(1.0f);
-    model_matrix = glm::rotate(model_matrix, glm::radians(35.264f), glm::vec3(1.0f, 0.0f, 0.0f));
-    model_matrix = glm::rotate(model_matrix, glm::radians(45.0f + 50.0f * t), glm::vec3(0.0f, 1.0f, 0.0f));
-
-    glm::mat4 view_matrix = glm::mat4(1.0f);
-    view_matrix = glm::translate(view_matrix, glm::vec3(0.0f, 0.0f, -3.0f));
+    f32 rotation_speed = 20;
 
     glm::mat4 projection_matrix = glm::perspective(
         glm::radians(45.0f),
@@ -296,15 +284,47 @@ update(App *app)
         0.1f,
         100.0f
     );
-
-    GLuint model_matrix_uniform = glGetUniformLocation(app->shader.id, "model_matrix");
-    GLuint view_matrix_uniform = glGetUniformLocation(app->shader.id, "view_matrix");
     GLuint projection_matrix_uniform = glGetUniformLocation(app->shader.id, "projection_matrix");
-    glUniformMatrix4fv(model_matrix_uniform, 1, GL_FALSE, glm::value_ptr(model_matrix));
-    glUniformMatrix4fv(view_matrix_uniform, 1, GL_FALSE, glm::value_ptr(view_matrix));
     glUniformMatrix4fv(projection_matrix_uniform, 1, GL_FALSE, glm::value_ptr(projection_matrix));
 
-    glDrawArrays(GL_TRIANGLES, 0, 36);
+    glm::mat4 view_matrix = glm::mat4(1.0f);
+    view_matrix = glm::translate(view_matrix, glm::vec3(0.0f, -3.0f, -13.5f));
+    view_matrix = glm::rotate(view_matrix, glm::radians(35.264f), glm::vec3(1.0f, 0.0f, 0.0f));
+    view_matrix = glm::rotate(view_matrix, glm::radians(45.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+    view_matrix = glm::rotate(view_matrix, glm::radians(rotation_speed * t), glm::vec3(0.0f, 1.0f, 0.0f));
+    GLuint view_matrix_uniform = glGetUniformLocation(app->shader.id, "view_matrix");
+    glUniformMatrix4fv(view_matrix_uniform, 1, GL_FALSE, glm::value_ptr(view_matrix));
+
+    u32 num_objects = 3;
+    glm::vec3 obj_positions[] = {
+        glm::vec3(-1.25f, 6.75f, 0.0f),
+        glm::vec3(0.0f, 6.75f, -1.5f),
+        glm::vec3(1.5f, 6.75f, 0.0f),
+    };
+
+    // floor
+    {
+        Texture_use(&app->texture1, GL_TEXTURE0);
+        glm::mat4 model_matrix = glm::mat4(1.0f);
+        model_matrix = glm::translate(model_matrix, glm::vec3(0.0f, 3.75f, 0.0f));
+        model_matrix = glm::scale(model_matrix, glm::vec3(5.0f, 5.0f, 5.0f));
+        GLuint model_matrix_uniform = glGetUniformLocation(app->shader.id, "model_matrix");
+        glUniformMatrix4fv(model_matrix_uniform, 1, GL_FALSE, glm::value_ptr(model_matrix));
+
+        glDrawArrays(GL_TRIANGLES, 0, 36);
+    }
+
+    Texture_use(&app->texture2, GL_TEXTURE0);
+    for (u32 i = 0; i < num_objects; i++)
+    {
+        glm::mat4 model_matrix = glm::mat4(1.0f);
+        model_matrix = glm::translate(model_matrix, obj_positions[i]);
+        model_matrix = glm::rotate(model_matrix, glm::radians(90.0f * i), glm::vec3(0.0f, 1.0f, 0.0f));
+        GLuint model_matrix_uniform = glGetUniformLocation(app->shader.id, "model_matrix");
+        glUniformMatrix4fv(model_matrix_uniform, 1, GL_FALSE, glm::value_ptr(model_matrix));
+
+        glDrawArrays(GL_TRIANGLES, 0, 36);
+    }
 
     SDL_GL_SwapWindow(app->window);
 }
@@ -350,7 +370,7 @@ int main(int argc, char *argv[])
         .frag_shader_path = "data/shaders/frag.frag",
         .vert_shader_path = "data/shaders/vert.vert",
         .texture1_path = "data/textures/stone.png",
-        .texture2_path = "data/textures/bill.png",
+        .texture2_path = "data/textures/coin.png",
     };
 
     printf("Initializing...\n");
