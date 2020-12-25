@@ -32,41 +32,56 @@ struct App
 };
 
 
-const int stride = 8;
+const int stride = 5;
 
 const float vertices[] = {
-    // top right
-    0.5f,  0.5f, 0.0f,
-    1.0f, 0.5f, 0.0f,
-    1.0f, 1.0f,
+    -0.5f, -0.5f, -0.5f,  0.0f, 0.0f,
+     0.5f, -0.5f, -0.5f,  1.0f, 0.0f,
+     0.5f,  0.5f, -0.5f,  1.0f, 1.0f,
+     0.5f,  0.5f, -0.5f,  1.0f, 1.0f,
+    -0.5f,  0.5f, -0.5f,  0.0f, 1.0f,
+    -0.5f, -0.5f, -0.5f,  0.0f, 0.0f,
 
-    // bottom right
-    0.5f, -0.5f, 0.0f,
-    0.5f, 1.0f, 0.0f,
-    1.0f, 0.0f,
+    -0.5f, -0.5f,  0.5f,  0.0f, 0.0f,
+     0.5f, -0.5f,  0.5f,  1.0f, 0.0f,
+     0.5f,  0.5f,  0.5f,  1.0f, 1.0f,
+     0.5f,  0.5f,  0.5f,  1.0f, 1.0f,
+    -0.5f,  0.5f,  0.5f,  0.0f, 1.0f,
+    -0.5f, -0.5f,  0.5f,  0.0f, 0.0f,
 
-    // bottom left
-    -0.5f, -0.5f, 0.0f,
-    0.0f, 0.5f, 1.0f,
-    0.0f, 0.0f,
+    -0.5f,  0.5f,  0.5f,  1.0f, 0.0f,
+    -0.5f,  0.5f, -0.5f,  1.0f, 1.0f,
+    -0.5f, -0.5f, -0.5f,  0.0f, 1.0f,
+    -0.5f, -0.5f, -0.5f,  0.0f, 1.0f,
+    -0.5f, -0.5f,  0.5f,  0.0f, 0.0f,
+    -0.5f,  0.5f,  0.5f,  1.0f, 0.0f,
 
-    // top left
-    -0.5f,  0.5f, 0.0f,
-    1.0f, 1.0f, 1.0f,
-    0.0f, 1.0f,
+     0.5f,  0.5f,  0.5f,  1.0f, 0.0f,
+     0.5f,  0.5f, -0.5f,  1.0f, 1.0f,
+     0.5f, -0.5f, -0.5f,  0.0f, 1.0f,
+     0.5f, -0.5f, -0.5f,  0.0f, 1.0f,
+     0.5f, -0.5f,  0.5f,  0.0f, 0.0f,
+     0.5f,  0.5f,  0.5f,  1.0f, 0.0f,
+
+    -0.5f, -0.5f, -0.5f,  0.0f, 1.0f,
+     0.5f, -0.5f, -0.5f,  1.0f, 1.0f,
+     0.5f, -0.5f,  0.5f,  1.0f, 0.0f,
+     0.5f, -0.5f,  0.5f,  1.0f, 0.0f,
+    -0.5f, -0.5f,  0.5f,  0.0f, 0.0f,
+    -0.5f, -0.5f, -0.5f,  0.0f, 1.0f,
+
+    -0.5f,  0.5f, -0.5f,  0.0f, 1.0f,
+     0.5f,  0.5f, -0.5f,  1.0f, 1.0f,
+     0.5f,  0.5f,  0.5f,  1.0f, 0.0f,
+     0.5f,  0.5f,  0.5f,  1.0f, 0.0f,
+    -0.5f,  0.5f,  0.5f,  0.0f, 0.0f,
+    -0.5f,  0.5f, -0.5f,  0.0f, 1.0f
 };
 
 const u32 indices[] = {
     0, 1, 3, // First triangle
     1, 2, 3, // Second triangle
 };
-
-const f32 tex_coords[] = {
-    0.0f, 0.0f,
-    1.0f, 0.0f,
-    0.5f, 1.0f,
-};
-
 
 internal bool
 init_rendering_context(App *app)
@@ -129,6 +144,8 @@ init_gl(App *app)
         return false;
     }
 
+    glEnable(GL_DEPTH_TEST);
+
     return true;
 }
 
@@ -164,41 +181,26 @@ init_rendering_data(App *app)
 {
     glGenVertexArrays(1, &app->vao);
     glGenBuffers(1, &app->vbo);
-    glGenBuffers(1, &app->ebo);
 
     glBindVertexArray(app->vao);
     {
         glBindBuffer(GL_ARRAY_BUFFER, app->vbo);
         glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
 
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, app->ebo);
-        glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
-
         // Vertex position
         glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, stride * sizeof(f32), nullptr);
         glEnableVertexAttribArray(0);
 
-        // Vertex color
+        // Tex coord
         glVertexAttribPointer(
             1,
-            3,
+            2,
             GL_FLOAT,
             GL_FALSE,
             stride * sizeof(f32),
             (void *)(3 * sizeof(f32))
         );
         glEnableVertexAttribArray(1);
-
-        // Tex coord
-        glVertexAttribPointer(
-            2,
-            2,
-            GL_FLOAT,
-            GL_FALSE,
-            stride * sizeof(f32),
-            (void *)(6 * sizeof(f32))
-        );
-        glEnableVertexAttribArray(2);
     }
 }
 
@@ -269,7 +271,7 @@ update(App *app)
     clock_gettime(CLOCK_MONOTONIC, &clock);
 
     glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
-    glClear(GL_COLOR_BUFFER_BIT);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     Shader_use(&app->shader);
     Texture_use(&app->texture1, GL_TEXTURE0);
@@ -278,11 +280,16 @@ update(App *app)
     glBindVertexArray(app->vao);
 
     f32 t = (f32)clock.tv_sec + (f32)clock.tv_nsec / 1e9;
+
+    // Isometric projection requires 45deg rotation about the y axis and
+    // ~35.264deg rotation about the x
     glm::mat4 model_matrix = glm::mat4(1.0f);
-    model_matrix = glm::rotate(model_matrix, glm::radians(50.0f * t), glm::vec3(0.0f, 1.0f, 0.0f));
-    model_matrix = glm::rotate(model_matrix, glm::radians(45.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+    model_matrix = glm::rotate(model_matrix, glm::radians(35.264f), glm::vec3(1.0f, 0.0f, 0.0f));
+    model_matrix = glm::rotate(model_matrix, glm::radians(45.0f + 50.0f * t), glm::vec3(0.0f, 1.0f, 0.0f));
+
     glm::mat4 view_matrix = glm::mat4(1.0f);
     view_matrix = glm::translate(view_matrix, glm::vec3(0.0f, 0.0f, -3.0f));
+
     glm::mat4 projection_matrix = glm::perspective(
         glm::radians(45.0f),
         (f32)app->window_width / (f32)app->window_height,
@@ -297,7 +304,7 @@ update(App *app)
     glUniformMatrix4fv(view_matrix_uniform, 1, GL_FALSE, glm::value_ptr(view_matrix));
     glUniformMatrix4fv(projection_matrix_uniform, 1, GL_FALSE, glm::value_ptr(projection_matrix));
 
-    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+    glDrawArrays(GL_TRIANGLES, 0, 36);
 
     SDL_GL_SwapWindow(app->window);
 }
