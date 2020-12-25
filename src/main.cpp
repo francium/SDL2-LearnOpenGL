@@ -15,9 +15,9 @@
 
 struct App
 {
-    u32           window_height,
-                  window_width;
-    SDL_Window    *window;
+    u32            window_height,
+                   window_width;
+    SDL_Window     *window;
     SDL_GLContext  context;
     GLuint         ebo,
                    vao,
@@ -268,15 +268,32 @@ update(App *app)
     struct timespec clock;
     clock_gettime(CLOCK_MONOTONIC, &clock);
 
+    f32 t = (f32)clock.tv_sec + (f32)clock.tv_nsec / 1e9;
+    f32 rotation_speed = 0.5;
+
+    glm::vec3 world_up = glm::vec3(0.0f, 1.0f, 0.0f);
+
+    f32 radius = 10.0f;
+    f32 cam_x = sin(rotation_speed * t) * radius;
+    f32 cam_z = cos(rotation_speed * t) * radius;
+    f32 cam_y = 5.0f;
+
+    glm::vec3 camera_pos = glm::vec3(cam_x, cam_y, cam_z);
+    glm::vec3 camera_target = glm::vec3(0.0f, 0.0f, 0.0f);
+    glm::vec3 camera_direction = glm::normalize(camera_pos - camera_target);
+    glm::vec3 camera_right = glm::normalize(glm::cross(world_up, camera_direction));
+    glm::vec3 camera_up = glm::cross(camera_direction, camera_right);
+
+    glm::mat4 view_matrix = glm::lookAt(camera_pos, camera_target, world_up);
+    GLuint view_matrix_uniform = glGetUniformLocation(app->shader.id, "view_matrix");
+    glUniformMatrix4fv(view_matrix_uniform, 1, GL_FALSE, glm::value_ptr(view_matrix));
+
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     Shader_use(&app->shader);
 
     glBindVertexArray(app->vao);
-
-    f32 t = (f32)clock.tv_sec + (f32)clock.tv_nsec / 1e9;
-    f32 rotation_speed = 20;
 
     glm::mat4 projection_matrix = glm::perspective(
         glm::radians(45.0f),
@@ -287,27 +304,19 @@ update(App *app)
     GLuint projection_matrix_uniform = glGetUniformLocation(app->shader.id, "projection_matrix");
     glUniformMatrix4fv(projection_matrix_uniform, 1, GL_FALSE, glm::value_ptr(projection_matrix));
 
-    glm::mat4 view_matrix = glm::mat4(1.0f);
-    view_matrix = glm::translate(view_matrix, glm::vec3(0.0f, -3.0f, -13.5f));
-    view_matrix = glm::rotate(view_matrix, glm::radians(35.264f), glm::vec3(1.0f, 0.0f, 0.0f));
-    view_matrix = glm::rotate(view_matrix, glm::radians(45.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-    view_matrix = glm::rotate(view_matrix, glm::radians(rotation_speed * t), glm::vec3(0.0f, 1.0f, 0.0f));
-    GLuint view_matrix_uniform = glGetUniformLocation(app->shader.id, "view_matrix");
-    glUniformMatrix4fv(view_matrix_uniform, 1, GL_FALSE, glm::value_ptr(view_matrix));
-
     u32 num_objects = 3;
     glm::vec3 obj_positions[] = {
-        glm::vec3(-1.25f, 6.75f, 0.0f),
-        glm::vec3(0.0f, 6.75f, -1.5f),
-        glm::vec3(1.5f, 6.75f, 0.0f),
+        glm::vec3(-1.25f, 0.5f, 0.0f),
+        glm::vec3(0.0f, 0.5f, -1.5f),
+        glm::vec3(1.5f, 0.5f, 0.0f),
     };
 
     // floor
     {
         Texture_use(&app->texture1, GL_TEXTURE0);
         glm::mat4 model_matrix = glm::mat4(1.0f);
-        model_matrix = glm::translate(model_matrix, glm::vec3(0.0f, 3.75f, 0.0f));
-        model_matrix = glm::scale(model_matrix, glm::vec3(5.0f, 5.0f, 5.0f));
+        model_matrix = glm::translate(model_matrix, glm::vec3(0.0f, 0.0f, 0.0f));
+        model_matrix = glm::scale(model_matrix, glm::vec3(50.0f, 0.0f, 50.0f));
         GLuint model_matrix_uniform = glGetUniformLocation(app->shader.id, "model_matrix");
         glUniformMatrix4fv(model_matrix_uniform, 1, GL_FALSE, glm::value_ptr(model_matrix));
 
@@ -332,7 +341,7 @@ update(App *app)
 
 /** Return of a `true` indicates program should exit */
 internal bool
-process_events()
+process_events(App *app)
 {
     bool quit = false;
 
@@ -362,7 +371,8 @@ process_events()
 }
 
 
-int main(int argc, char *argv[])
+int
+main(int argc, char *argv[])
 {
     App app = {
         .window_height = 600,
@@ -385,7 +395,7 @@ int main(int argc, char *argv[])
     bool should_run = true;
     while (should_run)
     {
-        const bool quit = process_events();
+        const bool quit = process_events(&app);
         if (quit) break;
 
         update(&app);
