@@ -15,6 +15,8 @@
 
 struct App
 {
+    u32           window_height,
+                  window_width;
     SDL_Window    *window;
     SDL_GLContext  context;
     GLuint         ebo,
@@ -104,7 +106,8 @@ init_sdl(App *app)
         "SDL App",
         SDL_WINDOWPOS_CENTERED,
         SDL_WINDOWPOS_CENTERED,
-        600, 600,
+        app->window_width,
+        app->window_height,
         SDL_WINDOW_OPENGL);
     if (app->window == nullptr)
     {
@@ -264,9 +267,6 @@ update(App *app)
 {
     struct timespec clock;
     clock_gettime(CLOCK_MONOTONIC, &clock);
-    GLuint flip_x_uniform = glGetUniformLocation(app->shader.id, "flip_x");
-    bool flip_x = clock.tv_sec % 2 == 0;
-
 
     glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
@@ -275,29 +275,29 @@ update(App *app)
     Texture_use(&app->texture1, GL_TEXTURE0);
     Texture_use(&app->texture2, GL_TEXTURE1);
 
-    glUniform1i(flip_x_uniform, flip_x);
-
     glBindVertexArray(app->vao);
 
-    f32 rotation = 100 * ((f32)clock.tv_sec + (f32)clock.tv_nsec / 1e9);
-    {
-        glm::mat4 trans = glm::mat4(1.0f);
-        trans = glm::translate(trans, glm::vec3(0.5f, -0.5f, 0.0f));
-        trans = glm::rotate(trans, glm::radians(rotation), glm::vec3(0.0, 0.0, 1.0));
-        trans = glm::scale(trans, glm::vec3(0.5f, 0.5f, 0.5f));
-        GLuint transform_uniform = glGetUniformLocation(app->shader.id, "transform");
-        glUniformMatrix4fv(transform_uniform, 1, GL_FALSE, glm::value_ptr(trans));
-        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
-    }
-    {
-        glm::mat4 trans = glm::mat4(1.0f);
-        trans = glm::translate(trans, glm::vec3(-0.5f, 0.5f, 0.0f));
-        trans = glm::rotate(trans, glm::radians(-rotation), glm::vec3(0.0, 0.0, 1.0));
-        trans = glm::scale(trans, glm::vec3(0.5f, 0.5f, 0.5f));
-        GLuint transform_uniform = glGetUniformLocation(app->shader.id, "transform");
-        glUniformMatrix4fv(transform_uniform, 1, GL_FALSE, glm::value_ptr(trans));
-        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
-    }
+    f32 t = (f32)clock.tv_sec + (f32)clock.tv_nsec / 1e9;
+    glm::mat4 model_matrix = glm::mat4(1.0f);
+    model_matrix = glm::rotate(model_matrix, glm::radians(50.0f * t), glm::vec3(0.0f, 1.0f, 0.0f));
+    model_matrix = glm::rotate(model_matrix, glm::radians(45.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+    glm::mat4 view_matrix = glm::mat4(1.0f);
+    view_matrix = glm::translate(view_matrix, glm::vec3(0.0f, 0.0f, -3.0f));
+    glm::mat4 projection_matrix = glm::perspective(
+        glm::radians(45.0f),
+        (f32)app->window_width / (f32)app->window_height,
+        0.1f,
+        100.0f
+    );
+
+    GLuint model_matrix_uniform = glGetUniformLocation(app->shader.id, "model_matrix");
+    GLuint view_matrix_uniform = glGetUniformLocation(app->shader.id, "view_matrix");
+    GLuint projection_matrix_uniform = glGetUniformLocation(app->shader.id, "projection_matrix");
+    glUniformMatrix4fv(model_matrix_uniform, 1, GL_FALSE, glm::value_ptr(model_matrix));
+    glUniformMatrix4fv(view_matrix_uniform, 1, GL_FALSE, glm::value_ptr(view_matrix));
+    glUniformMatrix4fv(projection_matrix_uniform, 1, GL_FALSE, glm::value_ptr(projection_matrix));
+
+    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 
     SDL_GL_SwapWindow(app->window);
 }
@@ -338,6 +338,8 @@ process_events()
 int main(int argc, char *argv[])
 {
     App app = {
+        .window_height = 600,
+        .window_width = 600,
         .frag_shader_path = "data/shaders/frag.frag",
         .vert_shader_path = "data/shaders/vert.vert",
         .texture1_path = "data/textures/stone.png",
