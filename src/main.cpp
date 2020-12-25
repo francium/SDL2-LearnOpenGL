@@ -13,6 +13,67 @@
 #include "texture.hpp"
 
 
+struct Camera
+{
+    glm::vec3 position;
+    glm::vec3 front;
+    glm::vec3 up;
+    f32 yaw;
+    f32 pitch;
+};
+
+
+internal void
+Camera_init(Camera *c)
+{
+    c->position = glm::vec3(0.0f, 1.0f, 5.0f);
+    c->front = glm::vec3(0.0f, 0.0f, -1.0f);
+    c->up = glm::vec3(0.0f, 1.0f, -1.0f);
+    c->yaw = 0.0f;
+    c->pitch = 0.0f;
+}
+
+
+struct Clock
+{
+    f32 dt;
+    struct timespec last_tick;
+};
+
+
+internal void
+Clock_init(Clock *clock)
+{
+    clock_gettime(CLOCK_MONOTONIC, &clock->last_tick);
+}
+
+
+internal void
+Clock_tick(Clock *clock)
+{
+    struct timespec now;
+    clock_gettime(CLOCK_MONOTONIC, &now);
+
+    clock->dt = (f32)(now.tv_sec - clock->last_tick.tv_sec)
+              + (f32)(now.tv_nsec - clock->last_tick.tv_nsec) / 1e6;
+    // FIXME: For some reason dt becomes negative (now < last_tick or this math
+    // above to calculate dt is wrong)
+    clock->dt = std::fmax(0, clock->dt);
+    clock->last_tick = now;
+}
+
+
+struct Inputs
+{
+    bool forward;
+    bool backward;
+    bool left;
+    bool right;
+    f32 mouse_x;
+    f32 mouse_y;
+};
+
+
 struct App
 {
     u32            window_height,
@@ -29,6 +90,9 @@ struct App
     Shader         shader;
     Texture        texture1,
                    texture2;
+    Clock          clock;
+    Inputs         inputs;
+    Camera         camera;
 };
 
 
@@ -265,26 +329,11 @@ init(App *app)
 internal void
 update(App *app)
 {
-    struct timespec clock;
-    clock_gettime(CLOCK_MONOTONIC, &clock);
-
-    f32 t = (f32)clock.tv_sec + (f32)clock.tv_nsec / 1e9;
-    f32 rotation_speed = 0.5;
+    Clock_tick(&app->clock);
 
     glm::vec3 world_up = glm::vec3(0.0f, 1.0f, 0.0f);
 
-    f32 radius = 10.0f;
-    f32 cam_x = sin(rotation_speed * t) * radius;
-    f32 cam_z = cos(rotation_speed * t) * radius;
-    f32 cam_y = 5.0f;
-
-    glm::vec3 camera_pos = glm::vec3(cam_x, cam_y, cam_z);
-    glm::vec3 camera_target = glm::vec3(0.0f, 0.0f, 0.0f);
-    glm::vec3 camera_direction = glm::normalize(camera_pos - camera_target);
-    glm::vec3 camera_right = glm::normalize(glm::cross(world_up, camera_direction));
-    glm::vec3 camera_up = glm::cross(camera_direction, camera_right);
-
-    glm::mat4 view_matrix = glm::lookAt(camera_pos, camera_target, world_up);
+    glm::mat4 view_matrix = glm::lookAt(app->camera.position, app->camera.position + app->camera.front, app->camera.up);
     GLuint view_matrix_uniform = glGetUniformLocation(app->shader.id, "view_matrix");
     glUniformMatrix4fv(view_matrix_uniform, 1, GL_FALSE, glm::value_ptr(view_matrix));
 
@@ -355,6 +404,42 @@ process_events(App *app)
                 {
                     quit = true;
                 }
+                if (event.key.keysym.sym == SDLK_w)
+                {
+                    app->inputs.forward = true;
+                }
+                if (event.key.keysym.sym == SDLK_s)
+                {
+                    app->inputs.backward = true;
+                }
+                if (event.key.keysym.sym == SDLK_a)
+                {
+                    app->inputs.left = true;
+                }
+                if (event.key.keysym.sym == SDLK_d)
+                {
+                    app->inputs.right = true;
+                }
+            } break;
+
+            case SDL_KEYUP:
+            {
+                if (event.key.keysym.sym == SDLK_w)
+                {
+                    app->inputs.forward = false;
+                }
+                if (event.key.keysym.sym == SDLK_s)
+                {
+                    app->inputs.backward = false;
+                }
+                if (event.key.keysym.sym == SDLK_a)
+                {
+                    app->inputs.left = false;
+                }
+                if (event.key.keysym.sym == SDLK_d)
+                {
+                    app->inputs.right = false;
+                }
             } break;
 
             case SDL_WINDOWEVENT:
@@ -365,6 +450,27 @@ process_events(App *app)
                 }
             } break;
         }
+    }
+
+    f32 camera_speed = app->clock.dt * 0.005f;
+
+    if (app->inputs.forward)
+    {
+        app->camera.position += camera_speed * app->camera.front;
+    }
+    if (app->inputs.backward)
+    {
+        app->camera.position -= camera_speed * app->camera.front;
+    }
+    if (app->inputs.left)
+    {
+        app->camera.position -= glm::normalize(glm::cross(app->camera.front, app->camera.up))
+                              * camera_speed;
+    }
+    if (app->inputs.right)
+    {
+        app->camera.position += glm::normalize(glm::cross(app->camera.front, app->camera.up))
+                              * camera_speed;
     }
 
     return quit;
@@ -382,6 +488,8 @@ main(int argc, char *argv[])
         .texture1_path = "data/textures/stone.png",
         .texture2_path = "data/textures/coin.png",
     };
+    Clock_init(&app.clock);
+    Camera_init(&app.camera);
 
     printf("Initializing...\n");
     if (!init(&app))
