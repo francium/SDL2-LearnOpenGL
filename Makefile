@@ -1,8 +1,10 @@
 CXX = g++
-CXX_FLAGS = -std=c++11
+CXX_FLAGS = -std=c++11 -Wall -Wno-unused-variable -Wno-unused-function
 LIBS =
 INCLUDES =
 CXX_FLAGS += -g -O0
+# CXX_FLAGS += -g -O2
+# CXX_FLAGS += -fsanitize=address
 
 
 ## SDL2
@@ -10,16 +12,16 @@ LIBS += $$(sdl2-config --libs --cflags)
 
 
 ## GLAD
-INCLUDES += -Ilib/glad/include
+INCLUDES += -isystem lib/glad/include
 LIBS += -ldl
 
 
 ## GLM
-INCLUDES += -Ilib/glm
+INCLUDES += -isystem lib/glm
 
 
 ## STB
-INCLUDES += -Ilib/stb/include
+INCLUDES += -isystem lib/stb/include
 
 
 COMPILE = $(CXX) $(CXX_FLAGS) $(LIBS) $(INCLUDES)

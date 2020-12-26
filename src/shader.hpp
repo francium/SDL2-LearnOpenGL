@@ -124,3 +124,15 @@ void Shader_seti(Shader *shader, const char *name, int value)
 {
     glUniform1i(glGetUniformLocation(shader->id, name), value);
 }
+
+
+void Shader_set_matrix4fv(Shader *shader, const char *name, const GLfloat *value)
+{
+    GLuint uniform_location = glGetUniformLocation(shader->id, name);
+    glUniformMatrix4fv(
+        uniform_location,
+        1,
+        GL_FALSE,
+        value
+    );
+}

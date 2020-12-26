@@ -15,7 +15,6 @@ enum CameraMovement
     CameraBackward,
     CameraLeft,
     CameraRight,
-    CameraMovementNone,
 };
 
 
@@ -33,8 +32,8 @@ struct Camera
 internal void
 Camera_init(Camera *c, f32 height, f32 fov)
 {
-    c->position = glm::vec3(0.0f, height, 5.0f);
-    c->front = glm::vec3(0.0f, 0.0f, -1.0f);
+    c->position = glm::vec3(0.0f, height, 8.0f);
+    c->front = glm::vec3(-0.0f, 0.0f, -1.0f);
     c->up = glm::vec3(0.0f, 1.0f, 0.0f);
     c->yaw = 0.0f;
     c->pitch = 0.0f;
@@ -80,7 +79,7 @@ Camera_process_keyboard(Camera *c, CameraMovement direction, f32 dt)
     }
 
     // FPS style, stay on ground, no floating
-    c->position.y = 1.0f;
+    c->position.y = 1.5f;
 }
 
 
@@ -93,7 +92,7 @@ Camera_process_mouse_motion(Camera *c, f32 dx, f32 dy)
 
     c->yaw += dx;
     c->pitch += dy;
-    c->pitch = clamp(-89.9f, c->pitch, 89.9f);
+    c->pitch = clamp(-70.0f, c->pitch, 80.0f);
 
     glm::vec3 front;
     front.x = cos(glm::radians(c->yaw)) * cos(glm::radians(c->pitch));

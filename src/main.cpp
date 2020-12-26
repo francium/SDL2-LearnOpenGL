@@ -1,53 +1,71 @@
 #include <stdio.h>
-#include <time.h>
 
 #include <glad/glad.h>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
+
 #include <SDL2/SDL.h>
 
 #include "camera.hpp"
+#include "clock.hpp"
 #include "platform.hpp"
 #include "result.hpp"
 #include "shader.hpp"
 #include "texture.hpp"
 #include "util.hpp"
 
+#include "data.hpp"
 
-const f32 default_camera_height = 1.0f;
+
+const f32 default_camera_height = 1.5f;
 const f32 default_fov = 45.0f;
 
+
+// Prevent camera from jumping due to mouse coming into window.
+// There may still be a bit of jumpiness, but less so with these two flags
 bool first_motion_input = false;
 bool first_mouse_wheel_input = false;
 
 
-struct Clock
+struct Obj
 {
-    f32 dt;
-    struct timespec last_tick;
+    GLuint vao,
+           vbo;
+    Shader shader;
+    Texture *texture;
 };
 
 
-internal void
-Clock_init(Clock *clock)
+internal bool
+Obj_init(
+    Obj *obj,
+    const char *vert_shader_path,
+    const char *obj_frag_shader_path,
+    Texture *texture
+)
 {
-    clock_gettime(CLOCK_MONOTONIC, &clock->last_tick);
+    *obj = {};
+    obj->texture = texture;
+
+    init_rendering_data(&obj->vao, &obj->vbo);
+
+    bool ok = Shader_init(
+        &obj->shader,
+        vert_shader_path,
+        obj_frag_shader_path
+    );
+
+    return ok;
 }
 
 
 internal void
-Clock_tick(Clock *clock)
+Obj_destroy(Obj *obj)
 {
-    struct timespec now;
-    clock_gettime(CLOCK_MONOTONIC, &now);
-
-    clock->dt = (f32)(now.tv_sec - clock->last_tick.tv_sec)
-              + (f32)(now.tv_nsec - clock->last_tick.tv_nsec) / 1e6;
-    // FIXME: For some reason dt becomes negative (now < last_tick or this math
-    // above to calculate dt is wrong)
-    clock->dt = fmax(0, clock->dt);
-    clock->last_tick = now;
+    glDeleteVertexArrays(1, &obj->vao);
+    glDeleteBuffers(1, &obj->vbo);
+    Shader_destroy(&obj->shader);
 }
 
 
@@ -66,71 +84,19 @@ struct App
                    window_height;
     SDL_Window     *window;
     SDL_GLContext  context;
-    GLuint         ebo,
-                   vao,
-                   vbo;
-    const char     *frag_shader_path,
+    const char     *obj_frag_shader_path,
+                   *light_frag_shader_path,
                    *vert_shader_path,
-                   *texture1_path,
-                   *texture2_path;
-    Shader         shader;
-    Texture        texture1,
-                   texture2;
+                   *texture_grass_path,
+                   *texture_stone_path;
+    Texture        texture_stone,
+                   texture_grass;
     Clock          clock;
     Inputs         inputs;
     Camera         camera;
-};
-
-
-const int stride = 5;
-
-const float vertices[] = {
-    -0.5f, -0.5f, -0.5f,  0.0f, 0.0f,
-     0.5f, -0.5f, -0.5f,  1.0f, 0.0f,
-     0.5f,  0.5f, -0.5f,  1.0f, 1.0f,
-     0.5f,  0.5f, -0.5f,  1.0f, 1.0f,
-    -0.5f,  0.5f, -0.5f,  0.0f, 1.0f,
-    -0.5f, -0.5f, -0.5f,  0.0f, 0.0f,
-
-    -0.5f, -0.5f,  0.5f,  0.0f, 0.0f,
-     0.5f, -0.5f,  0.5f,  1.0f, 0.0f,
-     0.5f,  0.5f,  0.5f,  1.0f, 1.0f,
-     0.5f,  0.5f,  0.5f,  1.0f, 1.0f,
-    -0.5f,  0.5f,  0.5f,  0.0f, 1.0f,
-    -0.5f, -0.5f,  0.5f,  0.0f, 0.0f,
-
-    -0.5f,  0.5f,  0.5f,  1.0f, 0.0f,
-    -0.5f,  0.5f, -0.5f,  1.0f, 1.0f,
-    -0.5f, -0.5f, -0.5f,  0.0f, 1.0f,
-    -0.5f, -0.5f, -0.5f,  0.0f, 1.0f,
-    -0.5f, -0.5f,  0.5f,  0.0f, 0.0f,
-    -0.5f,  0.5f,  0.5f,  1.0f, 0.0f,
-
-     0.5f,  0.5f,  0.5f,  1.0f, 0.0f,
-     0.5f,  0.5f, -0.5f,  1.0f, 1.0f,
-     0.5f, -0.5f, -0.5f,  0.0f, 1.0f,
-     0.5f, -0.5f, -0.5f,  0.0f, 1.0f,
-     0.5f, -0.5f,  0.5f,  0.0f, 0.0f,
-     0.5f,  0.5f,  0.5f,  1.0f, 0.0f,
-
-    -0.5f, -0.5f, -0.5f,  0.0f, 1.0f,
-     0.5f, -0.5f, -0.5f,  1.0f, 1.0f,
-     0.5f, -0.5f,  0.5f,  1.0f, 0.0f,
-     0.5f, -0.5f,  0.5f,  1.0f, 0.0f,
-    -0.5f, -0.5f,  0.5f,  0.0f, 0.0f,
-    -0.5f, -0.5f, -0.5f,  0.0f, 1.0f,
-
-    -0.5f,  0.5f, -0.5f,  0.0f, 1.0f,
-     0.5f,  0.5f, -0.5f,  1.0f, 1.0f,
-     0.5f,  0.5f,  0.5f,  1.0f, 0.0f,
-     0.5f,  0.5f,  0.5f,  1.0f, 0.0f,
-    -0.5f,  0.5f,  0.5f,  0.0f, 0.0f,
-    -0.5f,  0.5f, -0.5f,  0.0f, 1.0f
-};
-
-const u32 indices[] = {
-    0, 1, 3, // First triangle
-    1, 2, 3, // Second triangle
+    Obj            cube,
+                   floor,
+                   cube_light;
 };
 
 
@@ -149,7 +115,7 @@ init_rendering_context(App *app)
     app->context = SDL_GL_CreateContext(app->window);
     if (app->context == nullptr)
     {
-        printf("Failed to create GL context\n");
+        fprintf(stderr, "Failed to create GL context\n");
         return false;
     }
 
@@ -180,7 +146,7 @@ init_sdl(App *app)
     }
 
     SDL_ShowCursor(SDL_DISABLE);
-    SDL_GL_SetSwapInterval(1); // Use VSYNC
+    SDL_GL_SetSwapInterval(4); // Use VSYNC
 
     return init_rendering_context(app);
 }
@@ -203,15 +169,6 @@ init_gl(App *app)
 
 
 internal void
-cleanup_gl(App *app)
-{
-    glDeleteVertexArrays(1, &app->vao);
-    glDeleteBuffers(1, &app->vbo);
-    Shader_destroy(&app->shader);
-}
-
-
-internal void
 cleanup_sdl(App *app)
 {
     SDL_GL_DeleteContext(app->context);
@@ -223,66 +180,26 @@ cleanup_sdl(App *app)
 internal void
 cleanup(App *app)
 {
-    cleanup_gl(app);
+    Obj_destroy(&app->cube);
+    Obj_destroy(&app->floor);
+    Obj_destroy(&app->cube_light);
+
     cleanup_sdl(app);
-}
-
-
-internal void
-init_rendering_data(App *app)
-{
-    glGenVertexArrays(1, &app->vao);
-    glGenBuffers(1, &app->vbo);
-
-    glBindVertexArray(app->vao);
-    {
-        glBindBuffer(GL_ARRAY_BUFFER, app->vbo);
-        glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
-
-        // Vertex position
-        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, stride * sizeof(f32), nullptr);
-        glEnableVertexAttribArray(0);
-
-        // Tex coord
-        glVertexAttribPointer(
-            1,
-            2,
-            GL_FLOAT,
-            GL_FALSE,
-            stride * sizeof(f32),
-            (void *)(3 * sizeof(f32))
-        );
-        glEnableVertexAttribArray(1);
-    }
-}
-
-
-internal bool
-init_shaders(App *app)
-{
-    bool shader_init_ok = Shader_init(
-        &app->shader,
-        app->vert_shader_path,
-        app->frag_shader_path
-    );
-    if (!shader_init_ok) return false;
-
-    return true;
 }
 
 
 internal bool
 load_texture(const char *path, Texture *dest)
 {
-    Result<Texture> r_texture_1 = Texture_load(path);
-    if (!r_texture_1.ok)
+    Result<Texture> r_texture = Texture_load(path);
+    if (!r_texture.ok)
     {
         fprintf(stderr, "Failed to load texture: %s\n", path);
         return false;
     }
 
-    *dest = r_texture_1.value;
-    fprintf(stderr, "Loaded texture: %s\n", path);
+    *dest = r_texture.value;
+    fprintf(stderr, "Loaded texture: %s into %d (%p)\n", path, dest->id, dest);
 
     return true;
 }
@@ -291,48 +208,162 @@ load_texture(const char *path, Texture *dest)
 internal bool
 load_textures(App *app)
 {
-    if (!load_texture(app->texture1_path, &app->texture1)) return false;
-    if (!load_texture(app->texture2_path, &app->texture2)) return false;
-
-    Shader_use(&app->shader);
+    if (!load_texture(app->texture_grass_path, &app->texture_grass)) return false;
+    if (!load_texture(app->texture_stone_path, &app->texture_stone)) return false;
 
     return true;
 }
 
 
 internal bool
+init_objs(App *app)
+{
+    bool ok;
+
+    ok = Obj_init(
+        &app->floor,
+        app->vert_shader_path,
+        app->obj_frag_shader_path,
+        &app->texture_grass
+    );
+    if (!ok)
+    {
+        fprintf(stderr, "Failed to init floor\n");
+        return false;
+    }
+
+    ok = Obj_init(
+        &app->cube,
+        app->vert_shader_path,
+        app->obj_frag_shader_path,
+        &app->texture_stone
+    );
+    if (!ok)
+    {
+        fprintf(stderr, "Failed to init cube\n");
+        return false;
+    }
+
+    Obj_init(
+        &app->cube_light,
+        app->vert_shader_path,
+        app->light_frag_shader_path,
+        nullptr
+    );
+    if (!ok)
+    {
+        fprintf(stderr, "Failed to init cube_light\n");
+        return false;
+    }
+
+    return ok;
+}
+
+internal bool
 init(App *app)
 {
     if (!init_sdl(app)) return false;
     if (!init_gl(app)) return false;
-    if (!init_shaders(app)) return false;
     if (!load_textures(app)) return false;
-
-    init_rendering_data(app);
+    if (!init_objs(app)) return false;
 
     return true;
 }
 
 
 internal void
-update(App *app)
+render_light(Obj *light)
 {
-    Clock_tick(&app->clock);
+    Shader_use(&light->shader);
+    glBindVertexArray(light->vao);
 
-    GLuint view_matrix_uniform = glGetUniformLocation(app->shader.id, "view_matrix");
-    glUniformMatrix4fv(
-        view_matrix_uniform,
-        1,
-        GL_FALSE,
-        glm::value_ptr(Camera_toViewMatrix(&app->camera))
+    glm::mat4 model_matrix = glm::mat4(1.0f);
+    model_matrix = glm::translate(model_matrix, glm::vec3(0.0f, 5.0f, 0.0f));
+    Shader_set_matrix4fv(
+        &light->shader,
+        "model_matrix",
+        glm::value_ptr(model_matrix)
     );
 
-    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glDrawArrays(GL_TRIANGLES, 0, 36);
+}
 
-    Shader_use(&app->shader);
+internal void
+render_floor(Obj *floor)
+{
+    Shader_use(&floor->shader);
+    Texture_use(floor->texture, GL_TEXTURE0);
+    glBindVertexArray(floor->vao);
 
-    glBindVertexArray(app->vao);
+    i32 half_width = 20;
+    i32 half_length = 20;
+
+    for (i32 z = -half_length; z < half_length; z++)
+    {
+        for (i32 x = -half_width; x < half_width; x++)
+        {
+            glm::mat4 model_matrix = glm::mat4(1.0f);
+            model_matrix = glm::translate(
+                model_matrix,
+                glm::vec3(1.0f * (f32)x, 0.0f, 1.0f * (f32)z)
+            );
+            Shader_set_matrix4fv(
+                &floor->shader,
+                "model_matrix",
+                glm::value_ptr(model_matrix)
+            );
+
+
+            glDrawArrays(GL_TRIANGLES, 0, 36);
+        }
+    }
+}
+
+
+internal void
+render_objects(Obj *cube)
+{
+    Shader_use(&cube->shader);
+    Texture_use(cube->texture, GL_TEXTURE0);
+    glBindVertexArray(cube->vao);
+
+    for (u32 i = 0; i < num_objects; i++)
+    {
+        glm::mat4 model_matrix = glm::mat4(1.0f);
+        model_matrix = glm::translate(model_matrix, obj_positions[i]);
+        model_matrix = glm::rotate(
+            model_matrix,
+            glm::radians((i % 2 == 0) ? 90.0f * i : 0.0f),
+            glm::vec3(0.0f, 1.0f, 0.0f)
+        );
+        model_matrix = glm::rotate(
+            model_matrix,
+            glm::radians((i % 2 == 0) ? 90.0f * i : 0.0f),
+            glm::vec3(1.0f, 0.0f, 1.0f)
+        );
+        Shader_set_matrix4fv(
+            &cube->shader,
+            "model_matrix",
+            glm::value_ptr(model_matrix)
+        );
+
+        glDrawArrays(GL_TRIANGLES, 0, 36);
+    }
+}
+
+
+internal void
+set_transforms(App *app, Obj *obj)
+{
+    // TODO: Without doing a Shader_use (glUseProgram), things don't render
+    // correctly...why?
+    Shader_use(&obj->shader);
+
+    Shader_set_matrix4fv(
+        &obj->shader,
+        "view_matrix",
+        glm::value_ptr(Camera_toViewMatrix(&app->camera))
+    );
 
     glm::mat4 projection_matrix = glm::perspective(
         glm::radians(app->camera.fov),
@@ -340,47 +371,28 @@ update(App *app)
         0.1f,
         100.0f
     );
-    GLuint projection_matrix_uniform = glGetUniformLocation(
-        app->shader.id,
-        "projection_matrix"
-    );
-    glUniformMatrix4fv(
-        projection_matrix_uniform,
-        1,
-        GL_FALSE,
+    Shader_set_matrix4fv(
+        &obj->shader,
+        "projection_matrix",
         glm::value_ptr(projection_matrix)
     );
+}
 
-    u32 num_objects = 3;
-    glm::vec3 obj_positions[] = {
-        glm::vec3(-1.25f, 0.5f, 0.0f),
-        glm::vec3(0.0f, 0.5f, -1.5f),
-        glm::vec3(1.5f, 0.5f, 0.0f),
-    };
 
-    // floor
-    {
-        Texture_use(&app->texture1, GL_TEXTURE0);
-        glm::mat4 model_matrix = glm::mat4(1.0f);
-        model_matrix = glm::translate(model_matrix, glm::vec3(0.0f, 0.0f, 0.0f));
-        model_matrix = glm::scale(model_matrix, glm::vec3(50.0f, 0.0f, 50.0f));
-        GLuint model_matrix_uniform = glGetUniformLocation(app->shader.id, "model_matrix");
-        glUniformMatrix4fv(model_matrix_uniform, 1, GL_FALSE, glm::value_ptr(model_matrix));
+internal void
+update(App *app)
+{
+    glClearColor(0.502f, 0.678f, .996f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        glDrawArrays(GL_TRIANGLES, 0, 36);
-    }
+    set_transforms(app, &app->floor);
+    render_floor(&app->floor);
 
-    Texture_use(&app->texture2, GL_TEXTURE0);
-    for (u32 i = 0; i < num_objects; i++)
-    {
-        glm::mat4 model_matrix = glm::mat4(1.0f);
-        model_matrix = glm::translate(model_matrix, obj_positions[i]);
-        model_matrix = glm::rotate(model_matrix, glm::radians(90.0f * i), glm::vec3(0.0f, 1.0f, 0.0f));
-        GLuint model_matrix_uniform = glGetUniformLocation(app->shader.id, "model_matrix");
-        glUniformMatrix4fv(model_matrix_uniform, 1, GL_FALSE, glm::value_ptr(model_matrix));
+    set_transforms(app, &app->cube);
+    render_objects(&app->cube);
 
-        glDrawArrays(GL_TRIANGLES, 0, 36);
-    }
+    set_transforms(app, &app->cube_light);
+    render_light(&app->cube_light);
 
     SDL_GL_SwapWindow(app->window);
 }
@@ -490,7 +502,6 @@ process_events(App *app)
         }
     }
 
-    CameraMovement direction = CameraMovementNone;
     if (app->inputs.forward)
         Camera_process_keyboard(&app->camera, CameraForward, app->clock.dt);
     if (app->inputs.backward)
@@ -513,22 +524,25 @@ main(int argc, char *argv[])
     App app = {
         .window_width = 1366,
         .window_height = 768,
-        .frag_shader_path = "data/shaders/frag.frag",
+        .obj_frag_shader_path = "data/shaders/obj.frag",
+        .light_frag_shader_path = "data/shaders/light.frag",
         .vert_shader_path = "data/shaders/vert.vert",
-        .texture1_path = "data/textures/stone.png",
-        .texture2_path = "data/textures/coin.png",
+        .texture_grass_path = "data/textures/low-grass.png",
+        .texture_stone_path = "data/textures/low-stone.png",
     };
     Clock_init(&app.clock);
     Camera_init(&app.camera, default_camera_height, default_fov);
 
-    printf("Initializing...\n");
+    fprintf(stderr, "Initializing...\n");
     if (!init(&app))
     {
         cleanup(&app);
         return 1;
     }
 
-    printf("Starting...\n");
+    fprintf(stderr, "Starting...\n");
+
+    int i = 0;
 
     bool should_run = true;
     while (should_run)
@@ -536,10 +550,14 @@ main(int argc, char *argv[])
         const bool quit = process_events(&app);
         if (quit) break;
 
+        Clock_tick(&app.clock);
         update(&app);
+
+        if ((++i % 60) == 0)
+            printf("FPS=%.1f\n", 1 / app.clock.dt * 1000);
     }
 
-    printf("Exiting...\n");
+    fprintf(stderr, "Exiting...\n");
     cleanup(&app);
 
     return 0;
