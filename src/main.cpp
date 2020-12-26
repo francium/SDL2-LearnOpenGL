@@ -13,6 +13,13 @@
 #include "texture.hpp"
 
 
+const f32 default_camera_height = 1.0f;
+const f32 default_fov = 45.0f;
+
+bool first_motion_input = false;
+bool first_mouse_wheel_input = false;
+
+
 struct Camera
 {
     glm::vec3 position;
@@ -20,17 +27,19 @@ struct Camera
     glm::vec3 up;
     f32 yaw;
     f32 pitch;
+    f32 fov;
 };
 
 
 internal void
 Camera_init(Camera *c)
 {
-    c->position = glm::vec3(0.0f, 1.0f, 5.0f);
+    c->position = glm::vec3(0.0f, default_camera_height, 5.0f);
     c->front = glm::vec3(0.0f, 0.0f, -1.0f);
-    c->up = glm::vec3(0.0f, 1.0f, -1.0f);
+    c->up = glm::vec3(0.0f, 1.0f, 0.0f);
     c->yaw = 0.0f;
     c->pitch = 0.0f;
+    c->fov = default_fov;
 }
 
 
@@ -58,7 +67,7 @@ Clock_tick(Clock *clock)
               + (f32)(now.tv_nsec - clock->last_tick.tv_nsec) / 1e6;
     // FIXME: For some reason dt becomes negative (now < last_tick or this math
     // above to calculate dt is wrong)
-    clock->dt = std::fmax(0, clock->dt);
+    clock->dt = fmax(0, clock->dt);
     clock->last_tick = now;
 }
 
@@ -69,15 +78,13 @@ struct Inputs
     bool backward;
     bool left;
     bool right;
-    f32 mouse_x;
-    f32 mouse_y;
 };
 
 
 struct App
 {
-    u32            window_height,
-                   window_width;
+    u32            window_width,
+                   window_height;
     SDL_Window     *window;
     SDL_GLContext  context;
     GLuint         ebo,
@@ -147,6 +154,14 @@ const u32 indices[] = {
     1, 2, 3, // Second triangle
 };
 
+
+internal f32
+clamp(f32 min, f32 value, f32 max)
+{
+    return fmax(min, fmin(max, value));
+}
+
+
 internal bool
 init_rendering_context(App *app)
 {
@@ -165,8 +180,6 @@ init_rendering_context(App *app)
         printf("Failed to create GL context\n");
         return false;
     }
-
-    SDL_GL_SetSwapInterval(1); // Use VSYNC
 
     return true;
 }
@@ -187,12 +200,15 @@ init_sdl(App *app)
         SDL_WINDOWPOS_CENTERED,
         app->window_width,
         app->window_height,
-        SDL_WINDOW_OPENGL);
+        SDL_WINDOW_INPUT_GRABBED | SDL_WINDOW_FULLSCREEN | SDL_WINDOW_OPENGL);
     if (app->window == nullptr)
     {
         fprintf(stderr, "Failed to create main window\n");
         return false;
     }
+
+    SDL_ShowCursor(SDL_DISABLE);
+    SDL_GL_SetSwapInterval(1); // Use VSYNC
 
     return init_rendering_context(app);
 }
@@ -345,7 +361,7 @@ update(App *app)
     glBindVertexArray(app->vao);
 
     glm::mat4 projection_matrix = glm::perspective(
-        glm::radians(45.0f),
+        glm::radians(app->camera.fov),
         (f32)app->window_width / (f32)app->window_height,
         0.1f,
         100.0f
@@ -393,11 +409,50 @@ internal bool
 process_events(App *app)
 {
     bool quit = false;
+    bool mouse_checked = false;
+    f32 mouse_xd;
+    f32 mouse_yd;
+    f32 mouse_wheel_y;
 
     SDL_Event event;
     while (SDL_PollEvent(&event)) {
         switch (event.type)
         {
+            case SDL_MOUSEMOTION:
+            {
+                if (first_motion_input)
+                {
+                    first_motion_input = true;
+                    break;
+                }
+
+                // Make sure we don't for another motion event as result of centering mouse
+                if (mouse_checked) break;
+
+                mouse_xd = (f32)event.motion.xrel;
+                mouse_yd = -(f32)event.motion.yrel;
+
+                // Center mouse and set flag to avoid checking the generated
+                // motion event
+                mouse_checked = true;
+                SDL_WarpMouseInWindow(
+                    app->window,
+                    app->window_width / 2,
+                    app->window_height / 2
+                );
+            } break;
+
+            case SDL_MOUSEWHEEL:
+            {
+                if (first_mouse_wheel_input)
+                {
+                    first_mouse_wheel_input = true;
+                    break;
+                }
+
+                mouse_wheel_y = -(f32)event.wheel.y;
+            } break;
+
             case SDL_KEYDOWN:
             {
                 if (event.key.keysym.sym == SDLK_q)
@@ -472,6 +527,27 @@ process_events(App *app)
         app->camera.position += glm::normalize(glm::cross(app->camera.front, app->camera.up))
                               * camera_speed;
     }
+    // FPS style, stay on ground, no floating
+    app->camera.position.y = default_camera_height;
+
+    float sensitivity = 0.1;
+    mouse_xd *= sensitivity;
+    mouse_yd *= sensitivity;
+
+    app->camera.yaw += mouse_xd;
+    app->camera.pitch += mouse_yd;
+    app->camera.pitch = clamp(-89.9f, app->camera.pitch, 89.9f);
+    // if (app->camera.pitch > 89.0f) app->camera.pitch = 89.0f;
+    // if (app->camera.pitch < -89.0f) app->camera.pitch = -89.0f;
+
+    glm::vec3 front;
+    front.x = cos(glm::radians(app->camera.yaw)) * cos(glm::radians(app->camera.pitch));
+    front.y = sin(glm::radians(app->camera.pitch));
+    front.z = sin(glm::radians(app->camera.yaw)) * cos(glm::radians(app->camera.pitch));
+    app->camera.front = glm::normalize(front);
+
+    app->camera.fov += mouse_wheel_y;
+    app->camera.fov = clamp(10.0f, app->camera.fov,45.0f);
 
     return quit;
 }
@@ -481,8 +557,8 @@ int
 main(int argc, char *argv[])
 {
     App app = {
-        .window_height = 600,
-        .window_width = 600,
+        .window_width = 1366,
+        .window_height = 768,
         .frag_shader_path = "data/shaders/frag.frag",
         .vert_shader_path = "data/shaders/vert.vert",
         .texture1_path = "data/textures/stone.png",
