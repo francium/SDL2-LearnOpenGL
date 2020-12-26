@@ -1,16 +1,18 @@
 #include <stdio.h>
 #include <time.h>
 
-#include <SDL2/SDL.h>
 #include <glad/glad.h>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
+#include <SDL2/SDL.h>
 
+#include "camera.hpp"
 #include "platform.hpp"
 #include "result.hpp"
 #include "shader.hpp"
 #include "texture.hpp"
+#include "util.hpp"
 
 
 const f32 default_camera_height = 1.0f;
@@ -18,29 +20,6 @@ const f32 default_fov = 45.0f;
 
 bool first_motion_input = false;
 bool first_mouse_wheel_input = false;
-
-
-struct Camera
-{
-    glm::vec3 position;
-    glm::vec3 front;
-    glm::vec3 up;
-    f32 yaw;
-    f32 pitch;
-    f32 fov;
-};
-
-
-internal void
-Camera_init(Camera *c)
-{
-    c->position = glm::vec3(0.0f, default_camera_height, 5.0f);
-    c->front = glm::vec3(0.0f, 0.0f, -1.0f);
-    c->up = glm::vec3(0.0f, 1.0f, 0.0f);
-    c->yaw = 0.0f;
-    c->pitch = 0.0f;
-    c->fov = default_fov;
-}
 
 
 struct Clock
@@ -153,13 +132,6 @@ const u32 indices[] = {
     0, 1, 3, // First triangle
     1, 2, 3, // Second triangle
 };
-
-
-internal f32
-clamp(f32 min, f32 value, f32 max)
-{
-    return fmax(min, fmin(max, value));
-}
 
 
 internal bool
@@ -347,11 +319,13 @@ update(App *app)
 {
     Clock_tick(&app->clock);
 
-    glm::vec3 world_up = glm::vec3(0.0f, 1.0f, 0.0f);
-
-    glm::mat4 view_matrix = glm::lookAt(app->camera.position, app->camera.position + app->camera.front, app->camera.up);
     GLuint view_matrix_uniform = glGetUniformLocation(app->shader.id, "view_matrix");
-    glUniformMatrix4fv(view_matrix_uniform, 1, GL_FALSE, glm::value_ptr(view_matrix));
+    glUniformMatrix4fv(
+        view_matrix_uniform,
+        1,
+        GL_FALSE,
+        glm::value_ptr(Camera_toViewMatrix(&app->camera))
+    );
 
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -366,8 +340,16 @@ update(App *app)
         0.1f,
         100.0f
     );
-    GLuint projection_matrix_uniform = glGetUniformLocation(app->shader.id, "projection_matrix");
-    glUniformMatrix4fv(projection_matrix_uniform, 1, GL_FALSE, glm::value_ptr(projection_matrix));
+    GLuint projection_matrix_uniform = glGetUniformLocation(
+        app->shader.id,
+        "projection_matrix"
+    );
+    glUniformMatrix4fv(
+        projection_matrix_uniform,
+        1,
+        GL_FALSE,
+        glm::value_ptr(projection_matrix)
+    );
 
     u32 num_objects = 3;
     glm::vec3 obj_positions[] = {
@@ -410,9 +392,9 @@ process_events(App *app)
 {
     bool quit = false;
     bool mouse_checked = false;
-    f32 mouse_xd;
-    f32 mouse_yd;
-    f32 mouse_wheel_y;
+    f32 mouse_dx = 0.0f;
+    f32 mouse_dy = 0.0f;
+    f32 mouse_wheel_dy = 0.0f;
 
     SDL_Event event;
     while (SDL_PollEvent(&event)) {
@@ -426,11 +408,12 @@ process_events(App *app)
                     break;
                 }
 
-                // Make sure we don't for another motion event as result of centering mouse
+                // Make sure we don't for another motion event as result of
+                // centering mouse
                 if (mouse_checked) break;
 
-                mouse_xd = (f32)event.motion.xrel;
-                mouse_yd = -(f32)event.motion.yrel;
+                mouse_dx = (f32)event.motion.xrel;
+                mouse_dy = -(f32)event.motion.yrel;
 
                 // Center mouse and set flag to avoid checking the generated
                 // motion event
@@ -450,7 +433,7 @@ process_events(App *app)
                     break;
                 }
 
-                mouse_wheel_y = -(f32)event.wheel.y;
+                mouse_wheel_dy = -(f32)event.wheel.y;
             } break;
 
             case SDL_KEYDOWN:
@@ -507,47 +490,18 @@ process_events(App *app)
         }
     }
 
-    f32 camera_speed = app->clock.dt * 0.005f;
-
+    CameraMovement direction = CameraMovementNone;
     if (app->inputs.forward)
-    {
-        app->camera.position += camera_speed * app->camera.front;
-    }
+        Camera_process_keyboard(&app->camera, CameraForward, app->clock.dt);
     if (app->inputs.backward)
-    {
-        app->camera.position -= camera_speed * app->camera.front;
-    }
+        Camera_process_keyboard(&app->camera, CameraBackward, app->clock.dt);
     if (app->inputs.left)
-    {
-        app->camera.position -= glm::normalize(glm::cross(app->camera.front, app->camera.up))
-                              * camera_speed;
-    }
+        Camera_process_keyboard(&app->camera, CameraLeft, app->clock.dt);
     if (app->inputs.right)
-    {
-        app->camera.position += glm::normalize(glm::cross(app->camera.front, app->camera.up))
-                              * camera_speed;
-    }
-    // FPS style, stay on ground, no floating
-    app->camera.position.y = default_camera_height;
+        Camera_process_keyboard(&app->camera, CameraRight, app->clock.dt);
 
-    float sensitivity = 0.1;
-    mouse_xd *= sensitivity;
-    mouse_yd *= sensitivity;
-
-    app->camera.yaw += mouse_xd;
-    app->camera.pitch += mouse_yd;
-    app->camera.pitch = clamp(-89.9f, app->camera.pitch, 89.9f);
-    // if (app->camera.pitch > 89.0f) app->camera.pitch = 89.0f;
-    // if (app->camera.pitch < -89.0f) app->camera.pitch = -89.0f;
-
-    glm::vec3 front;
-    front.x = cos(glm::radians(app->camera.yaw)) * cos(glm::radians(app->camera.pitch));
-    front.y = sin(glm::radians(app->camera.pitch));
-    front.z = sin(glm::radians(app->camera.yaw)) * cos(glm::radians(app->camera.pitch));
-    app->camera.front = glm::normalize(front);
-
-    app->camera.fov += mouse_wheel_y;
-    app->camera.fov = clamp(10.0f, app->camera.fov,45.0f);
+    Camera_process_mouse_motion(&app->camera, mouse_dx, mouse_dy);
+    Camera_process_mouse_scroll(&app->camera, mouse_wheel_dy);
 
     return quit;
 }
@@ -565,7 +519,7 @@ main(int argc, char *argv[])
         .texture2_path = "data/textures/coin.png",
     };
     Clock_init(&app.clock);
-    Camera_init(&app.camera);
+    Camera_init(&app.camera, default_camera_height, default_fov);
 
     printf("Initializing...\n");
     if (!init(&app))
