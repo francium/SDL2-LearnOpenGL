@@ -337,6 +337,16 @@ render_objects(Obj *cube, glm::vec3 light_pos, glm::vec3 light_color)
     {
         glm::mat4 model_matrix = glm::mat4(1.0f);
         model_matrix = glm::translate(model_matrix, obj_positions[i]);
+        model_matrix = glm::rotate(
+            model_matrix,
+            glm::radians((i % 2 == 0) ? 90.0f * i : 0.0f),
+            glm::vec3(0.0f, 1.0f, 0.0f)
+        );
+        model_matrix = glm::rotate(
+            model_matrix,
+            glm::radians((i % 2 == 0) ? 90.0f * i : 0.0f),
+            glm::vec3(1.0f, 0.0f, 1.0f)
+        );
         Shader_set_matrix4fv(
             &cube->shader,
             "model_matrix",
