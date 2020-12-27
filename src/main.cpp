@@ -37,12 +37,18 @@ struct Light
 };
 
 
+struct Textures
+{
+    Texture *diffuse,
+            *specular;
+};
+
 struct Obj
 {
     GLuint vao,
            vbo;
     Shader shader;
-    Texture *texture;
+    Textures textures;
 };
 
 
@@ -58,11 +64,11 @@ Obj_init(
     Obj *obj,
     const char *vert_shader_path,
     const char *obj_frag_shader_path,
-    Texture *texture
+    Textures textures
 )
 {
     *obj = {};
-    obj->texture = texture;
+    obj->textures = textures;
 
     init_rendering_data(&obj->vao, &obj->vbo);
 
@@ -104,9 +110,13 @@ struct App
                    *light_frag_shader_path,
                    *vert_shader_path,
                    *texture_grass_path,
-                   *texture_stone_path;
+                   *texture_stone_path,
+                   *texture_grass_spec_path,
+                   *texture_stone_spec_path;
     Texture        texture_stone,
-                   texture_grass;
+                   texture_stone_spec,
+                   texture_grass,
+                   texture_grass_spec;
     Clock          clock;
     Inputs         inputs;
     Camera         camera;
@@ -225,7 +235,9 @@ internal bool
 load_textures(App *app)
 {
     if (!load_texture(app->texture_grass_path, &app->texture_grass)) return false;
+    if (!load_texture(app->texture_grass_spec_path, &app->texture_grass_spec)) return false;
     if (!load_texture(app->texture_stone_path, &app->texture_stone)) return false;
+    if (!load_texture(app->texture_stone_spec_path, &app->texture_stone_spec)) return false;
 
     return true;
 }
@@ -236,11 +248,15 @@ init_objs(App *app)
 {
     bool ok;
 
+    Textures grass_textures = {
+        .diffuse = &app->texture_grass,
+        .specular = &app->texture_grass_spec,
+    };
     ok = Obj_init(
         &app->floor,
         app->vert_shader_path,
         app->obj_frag_shader_path,
-        &app->texture_grass
+        grass_textures
     );
     if (!ok)
     {
@@ -248,11 +264,15 @@ init_objs(App *app)
         return false;
     }
 
+    Textures stone_textures = {
+        .diffuse = &app->texture_stone,
+        .specular = &app->texture_stone_spec,
+    };
     ok = Obj_init(
         &app->cube,
         app->vert_shader_path,
         app->obj_frag_shader_path,
-        &app->texture_stone
+        stone_textures
     );
     if (!ok)
     {
@@ -264,7 +284,7 @@ init_objs(App *app)
         &app->cube_light.obj,
         app->vert_shader_path,
         app->light_frag_shader_path,
-        nullptr
+        {}
     );
     if (!ok)
     {
@@ -273,9 +293,9 @@ init_objs(App *app)
     }
     app->cube_light.light = {
         .position = glm::vec3(0.0f, 0.0f, 0.0f),
-        .ambient = glm::vec3 (0.7f, 0.7f, 0.7f),
-        .diffuse = glm::vec3 (0.9f, 0.9f, 0.9f),
-        .specular = glm::vec3(0.5f, 0.5f, 0.5f),
+        .ambient = glm::vec3 (0.5f, 0.5f, 0.5f),
+        .diffuse = glm::vec3 (0.6f, 0.6f, 0.6f),
+        .specular = glm::vec3(0.2f, 0.2f, 0.2f),
     };
 
     return ok;
@@ -316,7 +336,10 @@ internal void
 render_floor(Obj *floor, glm::vec3 view_pos, LightObj *light)
 {
     Shader_use(&floor->shader);
-    Texture_use(floor->texture, GL_TEXTURE0);
+    Texture_use(floor->textures.diffuse, GL_TEXTURE0);
+    Texture_use(floor->textures.specular, GL_TEXTURE1);
+    Shader_seti(&floor->shader, "material.diffuse", 0);
+    Shader_seti(&floor->shader, "material.specular", 1);
     glBindVertexArray(floor->vao);
 
     Shader_setv3(&floor->shader, "light.position", light->light.position.x, light->light.position.y, light->light.position.z);
@@ -326,9 +349,6 @@ render_floor(Obj *floor, glm::vec3 view_pos, LightObj *light)
 
     Shader_setv3(&floor->shader, "view_pos", view_pos.x, view_pos.y, view_pos.z);
 
-    Shader_setv3(&floor->shader, "material.ambient", 0.1f, 0.5f, 0.1f);
-    Shader_setv3(&floor->shader, "material.diffuse", 0.1f, 0.5f, 0.1f);
-    Shader_setv3(&floor->shader, "material.specular", 0.25f, 0.25f, 0.25f);
     Shader_setf(&floor->shader, "material.shine", 2.0f);
 
     i32 half_width = 20;
@@ -360,7 +380,10 @@ internal void
 render_objects(Obj *cube, glm::vec3 view_pos, LightObj *light)
 {
     Shader_use(&cube->shader);
-    Texture_use(cube->texture, GL_TEXTURE0);
+    Texture_use(cube->textures.diffuse, GL_TEXTURE0);
+    Texture_use(cube->textures.specular, GL_TEXTURE1);
+    Shader_seti(&cube->shader, "material.diffuse", 0);
+    Shader_seti(&cube->shader, "material.specular", 1);
     glBindVertexArray(cube->vao);
 
     Shader_setv3(&cube->shader, "light.position", light->light.position.x, light->light.position.y, light->light.position.z);
@@ -370,9 +393,6 @@ render_objects(Obj *cube, glm::vec3 view_pos, LightObj *light)
 
     Shader_setv3(&cube->shader, "view_pos", view_pos.x, view_pos.y, view_pos.z);
 
-    Shader_setv3(&cube->shader, "material.ambient", 0.5f, 0.5f, 0.5f);
-    Shader_setv3(&cube->shader, "material.diffuse", 0.5f, 0.5f, 0.5f);
-    Shader_setv3(&cube->shader, "material.specular", 0.5f, 0.5f, 0.5f);
     Shader_setf(&cube->shader, "material.shine", 8.0f);
 
     for (u32 i = 0; i < num_objects; i++)
@@ -586,6 +606,8 @@ main(int argc, char *argv[])
         .vert_shader_path = "data/shaders/vert.vert",
         .texture_grass_path = "data/textures/low-grass.png",
         .texture_stone_path = "data/textures/low-stone.png",
+        .texture_grass_spec_path = "data/textures/low-grass.spec.png",
+        .texture_stone_spec_path = "data/textures/low-stone.spec.png",
     };
     Clock_init(&app.clock);
     Camera_init(&app.camera, default_camera_height, default_fov);
