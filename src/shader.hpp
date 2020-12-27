@@ -126,6 +126,12 @@ void Shader_seti(Shader *shader, const char *name, int value)
 }
 
 
+void Shader_setf(Shader *shader, const char *name, f32 value)
+{
+    glUniform1f(glGetUniformLocation(shader->id, name), value);
+}
+
+
 void Shader_setv3(Shader *shader, const char *name, f32 x, f32 y, f32 z)
 {
     glUniform3f(glGetUniformLocation(shader->id, name), x, y, z);

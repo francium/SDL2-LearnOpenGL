@@ -300,6 +300,10 @@ render_floor(Obj *floor, glm::vec3 view_pos, glm::vec3 light_pos, glm::vec3 ligh
     Shader_setv3(&floor->shader, "light_color", light_color.x, light_color.y, light_color.z);
     Shader_setv3(&floor->shader, "light_pos", light_pos.x, light_pos.y, light_pos.z);
     Shader_setv3(&floor->shader, "view_pos", view_pos.x, view_pos.y, view_pos.z);
+    Shader_setv3(&floor->shader, "material.ambient", 0.1f, 0.5f, 0.1f);
+    Shader_setv3(&floor->shader, "material.diffuse", 0.1f, 0.5f, 0.1f);
+    Shader_setv3(&floor->shader, "material.specular", 0.25f, 0.25f, 0.25f);
+    Shader_setf(&floor->shader, "material.shine", 2.0f);
 
     i32 half_width = 20;
     i32 half_length = 20;
@@ -336,6 +340,10 @@ render_objects(Obj *cube, glm::vec3 view_pos, glm::vec3 light_pos, glm::vec3 lig
     Shader_setv3(&cube->shader, "light_color", light_color.x, light_color.y, light_color.z);
     Shader_setv3(&cube->shader, "light_pos", light_pos.x, light_pos.y, light_pos.z);
     Shader_setv3(&cube->shader, "view_pos", view_pos.x, view_pos.y, view_pos.z);
+    Shader_setv3(&cube->shader, "material.ambient", 0.5f, 0.5f, 0.5f);
+    Shader_setv3(&cube->shader, "material.diffuse", 0.5f, 0.5f, 0.5f);
+    Shader_setv3(&cube->shader, "material.specular", 0.5f, 0.5f, 0.5f);
+    Shader_setf(&cube->shader, "material.shine", 8.0f);
 
     for (u32 i = 0; i < num_objects; i++)
     {
