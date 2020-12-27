@@ -28,12 +28,28 @@ bool first_motion_input = false;
 bool first_mouse_wheel_input = false;
 
 
+struct Light
+{
+    glm::vec3  position;
+    glm::vec3  ambient;
+    glm::vec3  diffuse;
+    glm::vec3  specular;
+};
+
+
 struct Obj
 {
     GLuint vao,
            vbo;
     Shader shader;
     Texture *texture;
+};
+
+
+struct LightObj
+{
+    Obj obj;
+    Light light;
 };
 
 
@@ -95,8 +111,8 @@ struct App
     Inputs         inputs;
     Camera         camera;
     Obj            cube,
-                   floor,
-                   cube_light;
+                   floor;
+    LightObj       cube_light;
 };
 
 
@@ -182,7 +198,7 @@ cleanup(App *app)
 {
     Obj_destroy(&app->cube);
     Obj_destroy(&app->floor);
-    Obj_destroy(&app->cube_light);
+    Obj_destroy(&app->cube_light.obj);
 
     cleanup_sdl(app);
 }
@@ -245,7 +261,7 @@ init_objs(App *app)
     }
 
     Obj_init(
-        &app->cube_light,
+        &app->cube_light.obj,
         app->vert_shader_path,
         app->light_frag_shader_path,
         nullptr
@@ -255,6 +271,12 @@ init_objs(App *app)
         fprintf(stderr, "Failed to init cube_light\n");
         return false;
     }
+    app->cube_light.light = {
+        .position = glm::vec3(0.0f, 0.0f, 0.0f),
+        .ambient = glm::vec3 (0.7f, 0.7f, 0.7f),
+        .diffuse = glm::vec3 (0.9f, 0.9f, 0.9f),
+        .specular = glm::vec3(0.5f, 0.5f, 0.5f),
+    };
 
     return ok;
 }
@@ -272,17 +294,17 @@ init(App *app)
 
 
 internal void
-render_light(Obj *light, glm::vec3 light_pos)
+render_light(LightObj *light)
 {
-    Shader_use(&light->shader);
-    glBindVertexArray(light->vao);
+    Shader_use(&light->obj.shader);
+    glBindVertexArray(light->obj.vao);
 
     glm::mat4 model_matrix = glm::mat4(1.0f);
-    model_matrix = glm::translate(model_matrix, light_pos);
+    model_matrix = glm::translate(model_matrix, light->light.position);
     model_matrix = glm::translate(model_matrix, glm::vec3(-0.5f, -0.5f, -0.5f));
     model_matrix = glm::scale(model_matrix, glm::vec3(0.25f, 0.25f, 0.25f));
     Shader_set_matrix4fv(
-        &light->shader,
+        &light->obj.shader,
         "model_matrix",
         glm::value_ptr(model_matrix)
     );
@@ -291,15 +313,19 @@ render_light(Obj *light, glm::vec3 light_pos)
 }
 
 internal void
-render_floor(Obj *floor, glm::vec3 view_pos, glm::vec3 light_pos, glm::vec3 light_color)
+render_floor(Obj *floor, glm::vec3 view_pos, LightObj *light)
 {
     Shader_use(&floor->shader);
     Texture_use(floor->texture, GL_TEXTURE0);
     glBindVertexArray(floor->vao);
 
-    Shader_setv3(&floor->shader, "light_color", light_color.x, light_color.y, light_color.z);
-    Shader_setv3(&floor->shader, "light_pos", light_pos.x, light_pos.y, light_pos.z);
+    Shader_setv3(&floor->shader, "light.position", light->light.position.x, light->light.position.y, light->light.position.z);
+    Shader_setv3(&floor->shader, "light.ambient", light->light.ambient.x, light->light.ambient.y, light->light.ambient.z);
+    Shader_setv3(&floor->shader, "light.diffuse", light->light.diffuse.x, light->light.diffuse.y, light->light.diffuse.z);
+    Shader_setv3(&floor->shader, "light.specular", light->light.specular.x, light->light.specular.y, light->light.specular.z);
+
     Shader_setv3(&floor->shader, "view_pos", view_pos.x, view_pos.y, view_pos.z);
+
     Shader_setv3(&floor->shader, "material.ambient", 0.1f, 0.5f, 0.1f);
     Shader_setv3(&floor->shader, "material.diffuse", 0.1f, 0.5f, 0.1f);
     Shader_setv3(&floor->shader, "material.specular", 0.25f, 0.25f, 0.25f);
@@ -331,15 +357,19 @@ render_floor(Obj *floor, glm::vec3 view_pos, glm::vec3 light_pos, glm::vec3 ligh
 
 
 internal void
-render_objects(Obj *cube, glm::vec3 view_pos, glm::vec3 light_pos, glm::vec3 light_color)
+render_objects(Obj *cube, glm::vec3 view_pos, LightObj *light)
 {
     Shader_use(&cube->shader);
     Texture_use(cube->texture, GL_TEXTURE0);
     glBindVertexArray(cube->vao);
 
-    Shader_setv3(&cube->shader, "light_color", light_color.x, light_color.y, light_color.z);
-    Shader_setv3(&cube->shader, "light_pos", light_pos.x, light_pos.y, light_pos.z);
+    Shader_setv3(&cube->shader, "light.position", light->light.position.x, light->light.position.y, light->light.position.z);
+    Shader_setv3(&cube->shader, "light.ambient", light->light.ambient.x, light->light.ambient.y, light->light.ambient.z);
+    Shader_setv3(&cube->shader, "light.diffuse", light->light.diffuse.x, light->light.diffuse.y, light->light.diffuse.z);
+    Shader_setv3(&cube->shader, "light.specular", light->light.specular.x, light->light.specular.y, light->light.specular.z);
+
     Shader_setv3(&cube->shader, "view_pos", view_pos.x, view_pos.y, view_pos.z);
+
     Shader_setv3(&cube->shader, "material.ambient", 0.5f, 0.5f, 0.5f);
     Shader_setv3(&cube->shader, "material.diffuse", 0.5f, 0.5f, 0.5f);
     Shader_setv3(&cube->shader, "material.specular", 0.5f, 0.5f, 0.5f);
@@ -406,21 +436,20 @@ update(App *app)
     f32 a = 5;
     f32 b = a - a / 2.0f;
 
-    glm::vec3 light_pos = glm::vec3(a * x + b, 5.0f, a * z + b);
-    glm::vec3 light_color = glm::vec3(1.0f, 1.0f, 1.0f);
+    app->cube_light.light.position = glm::vec3(a * x + b, 5.0f, a * z + b);
 
     glClearColor(0.502f, 0.678f, .996f, 1.0f); // Light sky
     // glClearColor(0.002f, 0.078f, .196f, 1.0f); // Dark sky
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     set_transforms(app, &app->floor);
-    render_floor(&app->floor, app->camera.position, light_pos, light_color);
+    render_floor(&app->floor, app->camera.position, &app->cube_light);
 
     set_transforms(app, &app->cube);
-    render_objects(&app->cube, app->camera.position, light_pos, light_color);
+    render_objects(&app->cube, app->camera.position, &app->cube_light);
 
-    set_transforms(app, &app->cube_light);
-    render_light(&app->cube_light, light_pos);
+    set_transforms(app, &app->cube_light.obj);
+    render_light(&app->cube_light);
 
     SDL_GL_SwapWindow(app->window);
 }
