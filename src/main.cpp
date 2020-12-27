@@ -279,6 +279,8 @@ render_light(Obj *light, glm::vec3 light_pos)
 
     glm::mat4 model_matrix = glm::mat4(1.0f);
     model_matrix = glm::translate(model_matrix, light_pos);
+    model_matrix = glm::translate(model_matrix, glm::vec3(-0.5f, -0.5f, -0.5f));
+    model_matrix = glm::scale(model_matrix, glm::vec3(0.25f, 0.25f, 0.25f));
     Shader_set_matrix4fv(
         &light->shader,
         "model_matrix",
@@ -289,7 +291,7 @@ render_light(Obj *light, glm::vec3 light_pos)
 }
 
 internal void
-render_floor(Obj *floor, glm::vec3 light_pos, glm::vec3 light_color)
+render_floor(Obj *floor, glm::vec3 view_pos, glm::vec3 light_pos, glm::vec3 light_color)
 {
     Shader_use(&floor->shader);
     Texture_use(floor->texture, GL_TEXTURE0);
@@ -297,6 +299,7 @@ render_floor(Obj *floor, glm::vec3 light_pos, glm::vec3 light_color)
 
     Shader_setv3(&floor->shader, "light_color", light_color.x, light_color.y, light_color.z);
     Shader_setv3(&floor->shader, "light_pos", light_pos.x, light_pos.y, light_pos.z);
+    Shader_setv3(&floor->shader, "view_pos", view_pos.x, view_pos.y, view_pos.z);
 
     i32 half_width = 20;
     i32 half_length = 20;
@@ -324,7 +327,7 @@ render_floor(Obj *floor, glm::vec3 light_pos, glm::vec3 light_color)
 
 
 internal void
-render_objects(Obj *cube, glm::vec3 light_pos, glm::vec3 light_color)
+render_objects(Obj *cube, glm::vec3 view_pos, glm::vec3 light_pos, glm::vec3 light_color)
 {
     Shader_use(&cube->shader);
     Texture_use(cube->texture, GL_TEXTURE0);
@@ -332,6 +335,7 @@ render_objects(Obj *cube, glm::vec3 light_pos, glm::vec3 light_color)
 
     Shader_setv3(&cube->shader, "light_color", light_color.x, light_color.y, light_color.z);
     Shader_setv3(&cube->shader, "light_pos", light_pos.x, light_pos.y, light_pos.z);
+    Shader_setv3(&cube->shader, "view_pos", view_pos.x, view_pos.y, view_pos.z);
 
     for (u32 i = 0; i < num_objects; i++)
     {
@@ -402,10 +406,10 @@ update(App *app)
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     set_transforms(app, &app->floor);
-    render_floor(&app->floor, light_pos, light_color);
+    render_floor(&app->floor, app->camera.position, light_pos, light_color);
 
     set_transforms(app, &app->cube);
-    render_objects(&app->cube, light_pos, light_color);
+    render_objects(&app->cube, app->camera.position, light_pos, light_color);
 
     set_transforms(app, &app->cube_light);
     render_light(&app->cube_light, light_pos);
