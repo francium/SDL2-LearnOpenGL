@@ -18,7 +18,7 @@
 #include "data.hpp"
 
 
-const f32 default_camera_height = 1.5f;
+const f32 default_camera_height = 2.0f;
 const f32 default_fov = 45.0f;
 
 
@@ -272,13 +272,13 @@ init(App *app)
 
 
 internal void
-render_light(Obj *light)
+render_light(Obj *light, glm::vec3 light_pos)
 {
     Shader_use(&light->shader);
     glBindVertexArray(light->vao);
 
     glm::mat4 model_matrix = glm::mat4(1.0f);
-    model_matrix = glm::translate(model_matrix, glm::vec3(0.0f, 5.0f, 0.0f));
+    model_matrix = glm::translate(model_matrix, light_pos);
     Shader_set_matrix4fv(
         &light->shader,
         "model_matrix",
@@ -289,13 +289,14 @@ render_light(Obj *light)
 }
 
 internal void
-render_floor(Obj *floor)
+render_floor(Obj *floor, glm::vec3 light_pos, glm::vec3 light_color)
 {
     Shader_use(&floor->shader);
     Texture_use(floor->texture, GL_TEXTURE0);
     glBindVertexArray(floor->vao);
 
-    Shader_setv3(&floor->shader, "light_color_in", 1.0f, 0.5f, 0.0f);
+    Shader_setv3(&floor->shader, "light_color", light_color.x, light_color.y, light_color.z);
+    Shader_setv3(&floor->shader, "light_pos", light_pos.x, light_pos.y, light_pos.z);
 
     i32 half_width = 20;
     i32 half_length = 20;
@@ -323,28 +324,19 @@ render_floor(Obj *floor)
 
 
 internal void
-render_objects(Obj *cube)
+render_objects(Obj *cube, glm::vec3 light_pos, glm::vec3 light_color)
 {
     Shader_use(&cube->shader);
     Texture_use(cube->texture, GL_TEXTURE0);
     glBindVertexArray(cube->vao);
 
-    Shader_setv3(&cube->shader, "light_color_in", 1.0f, 0.5f, 0.0f);
+    Shader_setv3(&cube->shader, "light_color", light_color.x, light_color.y, light_color.z);
+    Shader_setv3(&cube->shader, "light_pos", light_pos.x, light_pos.y, light_pos.z);
 
     for (u32 i = 0; i < num_objects; i++)
     {
         glm::mat4 model_matrix = glm::mat4(1.0f);
         model_matrix = glm::translate(model_matrix, obj_positions[i]);
-        model_matrix = glm::rotate(
-            model_matrix,
-            glm::radians((i % 2 == 0) ? 90.0f * i : 0.0f),
-            glm::vec3(0.0f, 1.0f, 0.0f)
-        );
-        model_matrix = glm::rotate(
-            model_matrix,
-            glm::radians((i % 2 == 0) ? 90.0f * i : 0.0f),
-            glm::vec3(1.0f, 0.0f, 1.0f)
-        );
         Shader_set_matrix4fv(
             &cube->shader,
             "model_matrix",
@@ -386,18 +378,27 @@ set_transforms(App *app, Obj *obj)
 internal void
 update(App *app)
 {
-    // glClearColor(0.502f, 0.678f, .996f, 1.0f); // Light sky
-    glClearColor(0.002f, 0.078f, .196f, 1.0f); // Dark sky
+    f32 t = (f32)app->clock.last_tick.tv_sec + (f32)app->clock.last_tick.tv_nsec / 1e9;
+    f32 x = sin(t / 3.0f);
+    f32 z = cos(t / 3.0f);
+    f32 a = 5;
+    f32 b = a - a / 2.0f;
+
+    glm::vec3 light_pos = glm::vec3(a * x + b, 5.0f, a * z + b);
+    glm::vec3 light_color = glm::vec3(1.0f, 1.0f, 1.0f);
+
+    glClearColor(0.502f, 0.678f, .996f, 1.0f); // Light sky
+    // glClearColor(0.002f, 0.078f, .196f, 1.0f); // Dark sky
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     set_transforms(app, &app->floor);
-    render_floor(&app->floor);
+    render_floor(&app->floor, light_pos, light_color);
 
     set_transforms(app, &app->cube);
-    render_objects(&app->cube);
+    render_objects(&app->cube, light_pos, light_color);
 
     set_transforms(app, &app->cube_light);
-    render_light(&app->cube_light);
+    render_light(&app->cube_light, light_pos);
 
     SDL_GL_SwapWindow(app->window);
 }

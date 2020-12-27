@@ -79,7 +79,7 @@ Camera_process_keyboard(Camera *c, CameraMovement direction, f32 dt)
     }
 
     // FPS style, stay on ground, no floating
-    c->position.y = 1.5f;
+    c->position.y = 2.0f;
 }
 
 
