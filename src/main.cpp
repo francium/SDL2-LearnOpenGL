@@ -295,6 +295,8 @@ render_floor(Obj *floor)
     Texture_use(floor->texture, GL_TEXTURE0);
     glBindVertexArray(floor->vao);
 
+    Shader_setv3(&floor->shader, "light_color_in", 1.0f, 0.5f, 0.0f);
+
     i32 half_width = 20;
     i32 half_length = 20;
 
@@ -326,6 +328,8 @@ render_objects(Obj *cube)
     Shader_use(&cube->shader);
     Texture_use(cube->texture, GL_TEXTURE0);
     glBindVertexArray(cube->vao);
+
+    Shader_setv3(&cube->shader, "light_color_in", 1.0f, 0.5f, 0.0f);
 
     for (u32 i = 0; i < num_objects; i++)
     {
@@ -382,7 +386,8 @@ set_transforms(App *app, Obj *obj)
 internal void
 update(App *app)
 {
-    glClearColor(0.502f, 0.678f, .996f, 1.0f);
+    // glClearColor(0.502f, 0.678f, .996f, 1.0f); // Light sky
+    glClearColor(0.002f, 0.078f, .196f, 1.0f); // Dark sky
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     set_transforms(app, &app->floor);
