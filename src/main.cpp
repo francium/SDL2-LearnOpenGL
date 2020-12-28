@@ -20,6 +20,7 @@
 
 const f32 default_camera_height = 2.0f;
 const f32 default_fov = 45.0f;
+const u32 point_light_count = 2;
 
 
 // Prevent camera from jumping due to mouse coming into window.
@@ -28,7 +29,16 @@ bool first_motion_input = false;
 bool first_mouse_wheel_input = false;
 
 
-struct Light
+struct DirectionLight
+{
+    glm::vec3 direction;
+
+    glm::vec3  ambient;
+    glm::vec3  diffuse;
+    glm::vec3  specular;
+};
+
+struct PointLight
 {
     glm::vec3  ambient;
     glm::vec3  diffuse;
@@ -39,6 +49,28 @@ struct Light
     f32 quadratic;
 };
 
+struct SpotLight
+{
+    glm::vec3 direction;
+
+    f32 cut_off;
+    f32 outer_cut_off;
+
+    glm::vec3  ambient;
+    glm::vec3  diffuse;
+    glm::vec3  specular;
+
+    f32 constant;
+    f32 linear;
+    f32 quadratic;
+};
+
+union Light
+{
+    DirectionLight direction;
+    PointLight point;
+    SpotLight spot;
+};
 
 struct Textures
 {
@@ -60,6 +92,13 @@ struct LightObj
 {
     Obj obj;
     Light light;
+};
+
+struct WorldLights
+{
+    LightObj *points;
+    LightObj sun;
+    LightObj flashlight;
 };
 
 
@@ -101,6 +140,10 @@ struct Inputs
     bool backward;
     bool left;
     bool right;
+    bool flashlight_follow;
+    bool enable_flashlight;
+    bool enable_sun;
+    bool enable_point_lights;
 };
 
 
@@ -126,8 +169,9 @@ struct App
     Camera         camera;
     Obj            cube,
                    floor;
-    LightObj       cube_light;
-    Obj            sun;
+    LightObj       point_lights[point_light_count];
+    LightObj       sun;
+    LightObj       flashlight;
 };
 
 
@@ -213,7 +257,10 @@ cleanup(App *app)
 {
     Obj_destroy(&app->cube);
     Obj_destroy(&app->floor);
-    Obj_destroy(&app->cube_light.obj);
+    for (u32 i = 0; i < point_light_count; i++)
+        Obj_destroy(&app->point_lights[i].obj);
+    Obj_destroy(&app->sun.obj);
+    Obj_destroy(&app->flashlight.obj);
 
     cleanup_sdl(app);
 }
@@ -285,28 +332,39 @@ init_objs(App *app)
         return false;
     }
 
-    Obj_init(
-        &app->cube_light.obj,
-        app->vert_shader_path,
-        app->light_frag_shader_path,
-        {}
-    );
-    if (!ok)
-    {
-        fprintf(stderr, "Failed to init cube_light\n");
-        return false;
-    }
-    app->cube_light.light = {
-        .ambient = glm::vec3 (0.1f, 0.1f, 0.1f),
-        .diffuse = glm::vec3 (0.6f, 0.6f, 0.6f),
-        .specular = glm::vec3(0.2f, 0.2f, 0.2f),
-        .constant = 1.0f,
-        .linear = 0.09f,
-        .quadratic = 0.032f,
+    glm::vec3 point_light_positions[point_light_count] = {
+        glm::vec3(0.0f, 4.0f, 7.0f),
+        glm::vec3(0.0f, 20.0f, 7.0f),
+        // glm::vec3(-10.0f, 5.0f, -10.0f),
+        // glm::vec3(0.0f, 5.0f, 10.0f),
+        // glm::vec3(10.0f, 5.0f, -10.0f),
     };
+    for (u32 i = 0; i < point_light_count; i++)
+    {
+        Obj_init(
+            &app->point_lights[i].obj,
+            app->vert_shader_path,
+            app->light_frag_shader_path,
+            {}
+        );
+        if (!ok)
+        {
+            fprintf(stderr, "Failed to init point light %d\n", i);
+            return false;
+        }
+        app->point_lights[i].light.point = {
+            .ambient = glm::vec3 (0.1f, 0.1f, 0.1f),
+            .diffuse = glm::vec3 (0.4f, 0.4f, 0.4f),
+            .specular = glm::vec3(0.3f, 0.3f, 0.3f),
+            .constant = 1.0f,
+            .linear = 0.09f,
+            .quadratic = 0.032f,
+        };
+        app->point_lights[i].obj.position = point_light_positions[i];
+    }
 
     Obj_init(
-        &app->sun,
+        &app->sun.obj,
         app->vert_shader_path,
         app->light_frag_shader_path,
         {}
@@ -316,7 +374,34 @@ init_objs(App *app)
         fprintf(stderr, "Failed to init sun\n");
         return false;
     }
-    app->sun.position = glm::vec3(-50.0f, 50.0f, 50.0f);
+    app->sun.obj.position = glm::vec3(-50.0f, 50.0f, 50.0f);
+    app->sun.light.direction.direction = -app->sun.obj.position;
+    app->sun.light.direction.ambient = glm::vec3(0.1f, 0.1f, 0.1f);
+    app->sun.light.direction.diffuse = glm::vec3(0.1f, 0.1f, 0.1f);
+    app->sun.light.direction.specular = glm::vec3(0.1f, 0.1f, 0.1f);
+
+    Obj_init(
+        &app->flashlight.obj,
+        app->vert_shader_path,
+        app->light_frag_shader_path,
+        {}
+    );
+    if (!ok)
+    {
+        fprintf(stderr, "Failed to init flashlight\n");
+        return false;
+    }
+    app->flashlight.obj.position = glm::vec3(0.0f);
+    app->flashlight.light.spot.direction = glm::vec3(0.0f);
+    app->flashlight.light.spot.direction = glm::vec3(0.0f);
+    app->flashlight.light.spot.cut_off = glm::cos(glm::radians(12.5f));
+    app->flashlight.light.spot.outer_cut_off = glm::cos(glm::radians(15.0f));
+    app->flashlight.light.spot.ambient = glm::vec3(0.2f, 0.2f, 0.2f);
+    app->flashlight.light.spot.diffuse = glm::vec3(0.6f, 0.6f, 0.6f);
+    app->flashlight.light.spot.specular = glm::vec3(0.3f, 0.3f, 0.3f);
+    app->flashlight.light.spot.constant = 1.0f;
+    app->flashlight.light.spot.linear = 0.09f;
+    app->flashlight.light.spot.quadratic = 0.032f;
 
     return ok;
 }
@@ -334,35 +419,14 @@ init(App *app)
 
 
 internal void
-render_sun(Obj *sun)
-{
-    Shader_use(&sun->shader);
-    glBindVertexArray(sun->vao);
-
-    glm::mat4 model_matrix = glm::mat4(1.0f);
-    model_matrix = glm::translate(model_matrix, sun->position);
-    model_matrix = glm::translate(model_matrix, glm::vec3(-0.5f, -0.5f, -0.5f));
-    model_matrix = glm::scale(model_matrix, glm::vec3(2.0f, 2.0f, 2.0f));
-    Shader_set_matrix4fv(
-        &sun->shader,
-        "model_matrix",
-        glm::value_ptr(model_matrix)
-    );
-
-    glDrawArrays(GL_TRIANGLES, 0, 36);
-}
-
-
-internal void
-render_light(LightObj *light)
+render_light_obj(LightObj *light, f32 scale)
 {
     Shader_use(&light->obj.shader);
     glBindVertexArray(light->obj.vao);
 
     glm::mat4 model_matrix = glm::mat4(1.0f);
     model_matrix = glm::translate(model_matrix, light->obj.position);
-    model_matrix = glm::translate(model_matrix, glm::vec3(-0.5f, -0.5f, -0.5f));
-    model_matrix = glm::scale(model_matrix, glm::vec3(0.25f, 0.25f, 0.25f));
+    model_matrix = glm::scale(model_matrix, glm::vec3(scale));
     Shader_set_matrix4fv(
         &light->obj.shader,
         "model_matrix",
@@ -372,30 +436,72 @@ render_light(LightObj *light)
     glDrawArrays(GL_TRIANGLES, 0, 36);
 }
 
+
 internal void
-render_floor(Obj *floor, Camera *camera, LightObj *light, Obj *sun)
+set_light_uniforms(App *app, Shader *shader, WorldLights *lights)
+{
+    Shader_seti(shader, "enable_sun", app->inputs.enable_sun);
+    Shader_seti(shader, "enable_point_lights", app->inputs.enable_point_lights);
+    Shader_seti(shader, "enable_flashlight", app->inputs.enable_flashlight);
+
+    Shader_setv3(shader, "direction_light.direction", lights->sun.light.direction.direction);
+    Shader_setv3(shader, "direction_light.ambient", lights->sun.light.direction.ambient);
+    Shader_setv3(shader, "direction_light.diffuse", lights->sun.light.direction.diffuse);
+    Shader_setv3(shader, "direction_light.specular", lights->sun.light.direction.specular);
+
+    Shader_setv3(shader, "spot_light.position", lights->flashlight.obj.position);
+    Shader_setv3(shader, "spot_light.direction", lights->flashlight.light.spot.direction);
+    Shader_setf(shader, "spot_light.cut_off", lights->flashlight.light.spot.cut_off);
+    Shader_setf(shader, "spot_light.outer_cut_off", lights->flashlight.light.spot.outer_cut_off);
+    Shader_setv3(shader, "spot_light.ambient", lights->flashlight.light.spot.ambient);
+    Shader_setv3(shader, "spot_light.diffuse", lights->flashlight.light.spot.diffuse);
+    Shader_setv3(shader, "spot_light.specular", lights->flashlight.light.spot.specular);
+    Shader_setf(shader, "spot_light.constant", lights->flashlight.light.spot.constant);
+    Shader_setf(shader, "spot_light.linear", lights->flashlight.light.spot.linear);
+    Shader_setf(shader, "spot_light.quadratic", lights->flashlight.light.spot.quadratic);
+
+    char buf[32];
+    for (u32 i = 0; i < point_light_count; i++)
+    {
+        sprintf(buf, "point_lights[%u].position", i);
+        Shader_setv3(shader, buf, lights->points[i].obj.position);
+
+        sprintf(buf, "point_lights[%u].ambient", i);
+        Shader_setv3(shader, buf, lights->points[i].light.point.ambient);
+
+        sprintf(buf, "point_lights[%u].diffuse", i);
+        Shader_setv3(shader, buf, lights->points[i].light.point.diffuse);
+
+        sprintf(buf, "point_lights[%u].specular", i);
+        Shader_setv3(shader, buf, lights->points[i].light.point.specular);
+
+        sprintf(buf, "point_lights[%u].constant", i);
+        Shader_setf(shader, buf, lights->points[i].light.point.constant);
+
+        sprintf(buf, "point_lights[%u].linear", i);
+        Shader_setf(shader, buf, lights->points[i].light.point.linear);
+
+        sprintf(buf, "point_lights[%u].quadratic", i);
+        Shader_setf(shader, buf, lights->points[i].light.point.quadratic);
+    }
+}
+
+
+internal void
+render_floor(App *app, Obj *floor, Camera *camera, WorldLights *lights)
 {
     Shader_use(&floor->shader);
+    glBindVertexArray(floor->vao);
+
     Texture_use(floor->textures.diffuse, GL_TEXTURE0);
     Texture_use(floor->textures.specular, GL_TEXTURE1);
     Shader_seti(&floor->shader, "material.diffuse", 0);
     Shader_seti(&floor->shader, "material.specular", 1);
-    glBindVertexArray(floor->vao);
-
-    Shader_setv3(&floor->shader, "light.position", camera->position);
-    Shader_setv3(&floor->shader, "light.direction", camera->front);
-    Shader_setv3(&floor->shader, "light.ambient", light->light.ambient);
-    Shader_setv3(&floor->shader, "light.diffuse", light->light.diffuse);
-    Shader_setv3(&floor->shader, "light.specular", light->light.specular);
-    Shader_setf(&floor->shader, "light.constant", light->light.constant);
-    Shader_setf(&floor->shader, "light.linear", light->light.linear);
-    Shader_setf(&floor->shader, "light.quadratic", light->light.quadratic);
-    Shader_setf(&floor->shader, "light.cut_off", glm::cos(glm::radians(12.5f)));
-    Shader_setf(&floor->shader, "light.outer_cut_off", glm::cos(glm::radians(16.0f)));
+    Shader_setf(&floor->shader, "material.shine", 2.0f);
 
     Shader_setv3(&floor->shader, "view_pos", camera->position);
 
-    Shader_setf(&floor->shader, "material.shine", 2.0f);
+    set_light_uniforms(app, &floor->shader, lights);
 
     i32 half_width = 20;
     i32 half_length = 20;
@@ -423,29 +529,20 @@ render_floor(Obj *floor, Camera *camera, LightObj *light, Obj *sun)
 
 
 internal void
-render_objects(Obj *cube, Camera *camera, LightObj *light, Obj *sun)
+render_objects(App *app, Obj *cube, Camera *camera, WorldLights *lights)
 {
     Shader_use(&cube->shader);
+    glBindVertexArray(cube->vao);
+
     Texture_use(cube->textures.diffuse, GL_TEXTURE0);
     Texture_use(cube->textures.specular, GL_TEXTURE1);
     Shader_seti(&cube->shader, "material.diffuse", 0);
     Shader_seti(&cube->shader, "material.specular", 1);
-    glBindVertexArray(cube->vao);
-
-    Shader_setv3(&cube->shader, "light.position", camera->position);
-    Shader_setv3(&cube->shader, "light.direction", camera->front);
-    Shader_setv3(&cube->shader, "light.ambient", light->light.ambient);
-    Shader_setv3(&cube->shader, "light.diffuse", light->light.diffuse);
-    Shader_setv3(&cube->shader, "light.specular", light->light.specular);
-    Shader_setf(&cube->shader, "light.constant", light->light.constant);
-    Shader_setf(&cube->shader, "light.linear", light->light.linear);
-    Shader_setf(&cube->shader, "light.quadratic", light->light.quadratic);
-    Shader_setf(&cube->shader, "light.cut_off", glm::cos(glm::radians(12.5f)));
-    Shader_setf(&cube->shader, "light.outer_cut_off", glm::cos(glm::radians(16.0f)));
+    Shader_setf(&cube->shader, "material.shine", 8.0f);
 
     Shader_setv3(&cube->shader, "view_pos", camera->position);
 
-    Shader_setf(&cube->shader, "material.shine", 8.0f);
+    set_light_uniforms(app, &cube->shader, lights);
 
     for (u32 i = 0; i < num_objects; i++)
     {
@@ -508,23 +605,43 @@ update(App *app)
     f32 a = 5;
     f32 b = a - a / 2.0f;
 
-    app->cube_light.obj.position = glm::vec3(a * x + b, 5.0f, a * z + b);
+    // app->cube_light.obj.position = glm::vec3(a * x + b, 5.0f, a * z + b);
+
+    WorldLights lights = {
+        .points = app->point_lights,
+        .sun = app->sun,
+        .flashlight = app->flashlight,
+    };
 
     // glClearColor(0.502f, 0.678f, .996f, 1.0f); // Light sky
     glClearColor(0.001f, 0.038f, .096f, 1.0f); // Dark sky
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     set_transforms(app, &app->floor);
-    render_floor(&app->floor, &app->camera, &app->cube_light, &app->sun);
+    render_floor(app, &app->floor, &app->camera, &lights);
 
     set_transforms(app, &app->cube);
-    render_objects(&app->cube, &app->camera, &app->cube_light, &app->sun);
+    render_objects(app, &app->cube, &app->camera, &lights);
 
-    set_transforms(app, &app->cube_light.obj);
-    render_light(&app->cube_light);
+    if (app->inputs.enable_point_lights)
+        for (u32 i = 0; i < point_light_count; i++)
+        {
+            LightObj *light = &app->point_lights[i];
+            set_transforms(app, &light->obj);
+            render_light_obj(light, 0.5);
+        }
 
-    // set_transforms(app, &app->sun);
-    // render_sun(&app->sun);
+    if (app->inputs.enable_sun)
+    {
+        set_transforms(app, &app->sun.obj);
+        render_light_obj(&app->sun, 2.0f);
+    }
+
+    if (!app->inputs.flashlight_follow && app->inputs.enable_flashlight)
+    {
+        set_transforms(app, &app->flashlight.obj);
+        render_light_obj(&app->flashlight, 0.25f);
+    }
 
     SDL_GL_SwapWindow(app->window);
 }
@@ -622,6 +739,22 @@ process_events(App *app)
                 {
                     app->inputs.right = false;
                 }
+                if (event.key.keysym.sym == SDLK_f)
+                {
+                    app->inputs.flashlight_follow = !app->inputs.flashlight_follow;
+                }
+                if (event.key.keysym.sym == SDLK_1)
+                {
+                    app->inputs.enable_sun = !app->inputs.enable_sun;
+                }
+                if (event.key.keysym.sym == SDLK_2)
+                {
+                    app->inputs.enable_point_lights = !app->inputs.enable_point_lights;
+                }
+                if (event.key.keysym.sym == SDLK_3)
+                {
+                    app->inputs.enable_flashlight = !app->inputs.enable_flashlight;
+                }
             } break;
 
             case SDL_WINDOWEVENT:
@@ -646,6 +779,13 @@ process_events(App *app)
     Camera_process_mouse_motion(&app->camera, mouse_dx, mouse_dy);
     Camera_process_mouse_scroll(&app->camera, mouse_wheel_dy);
 
+    if (app->inputs.flashlight_follow)
+    {
+        app->flashlight.light.spot.direction = app->camera.front;
+        app->flashlight.obj.position = app->camera.position;
+        app->flashlight.obj.position.y -= 0.5f;
+    }
+
     return quit;
 }
 
@@ -664,6 +804,10 @@ main(int argc, char *argv[])
         .texture_grass_spec_path = "data/textures/low-grass.spec.png",
         .texture_stone_spec_path = "data/textures/low-stone.spec.png",
     };
+    app.inputs.flashlight_follow = true;
+    app.inputs.enable_sun = true;
+    app.inputs.enable_point_lights = true;
+    app.inputs.enable_flashlight = true;
     Clock_init(&app.clock);
     Camera_init(&app.camera, default_camera_height, default_fov);
 
