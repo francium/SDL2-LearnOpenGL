@@ -9,11 +9,16 @@ struct Material
 
 struct Light
 {
+    vec3 position;
     vec3 direction;
 
     vec3 ambient;
     vec3 diffuse;
     vec3 specular;
+
+    float constant;
+    float linear;
+    float quadratic;
 };
 
 in vec2 tex_coord;
@@ -28,6 +33,14 @@ uniform Light light;
 
 void main()
 {
+    float distance = length(light.position - frag_pos);
+    float inv_attenuation = (
+        light.constant
+        + light.linear * distance
+        + light.quadratic * (distance * distance)
+    );
+    float attenuation = 1.0 / inv_attenuation;
+
     vec3 diffuse_map_value = vec3(texture(material.diffuse, tex_coord));
     vec3 specular_map_value = vec3(texture(material.specular, tex_coord));
 
@@ -44,6 +57,10 @@ void main()
     vec3 ambient = light.ambient * diffuse_map_value;
     vec3 diffuse = light.diffuse * (diff * diffuse_map_value);
     vec3 specular = light.specular * spec * specular_map_value;
+
+    ambient *= attenuation;
+    diffuse *= attenuation;
+    specular *= attenuation;
 
     FragColor = vec4(ambient + diffuse + specular, 1.0);
 }
