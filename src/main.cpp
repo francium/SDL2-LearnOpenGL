@@ -297,7 +297,7 @@ init_objs(App *app)
         return false;
     }
     app->cube_light.light = {
-        .ambient = glm::vec3 (0.2f, 0.2f, 0.2f),
+        .ambient = glm::vec3 (0.1f, 0.1f, 0.1f),
         .diffuse = glm::vec3 (0.6f, 0.6f, 0.6f),
         .specular = glm::vec3(0.2f, 0.2f, 0.2f),
         .constant = 1.0f,
@@ -391,6 +391,7 @@ render_floor(Obj *floor, Camera *camera, LightObj *light, Obj *sun)
     Shader_setf(&floor->shader, "light.linear", light->light.linear);
     Shader_setf(&floor->shader, "light.quadratic", light->light.quadratic);
     Shader_setf(&floor->shader, "light.cut_off", glm::cos(glm::radians(12.5f)));
+    Shader_setf(&floor->shader, "light.outer_cut_off", glm::cos(glm::radians(16.0f)));
 
     Shader_setv3(&floor->shader, "view_pos", camera->position);
 
@@ -440,6 +441,7 @@ render_objects(Obj *cube, Camera *camera, LightObj *light, Obj *sun)
     Shader_setf(&cube->shader, "light.linear", light->light.linear);
     Shader_setf(&cube->shader, "light.quadratic", light->light.quadratic);
     Shader_setf(&cube->shader, "light.cut_off", glm::cos(glm::radians(12.5f)));
+    Shader_setf(&cube->shader, "light.outer_cut_off", glm::cos(glm::radians(16.0f)));
 
     Shader_setv3(&cube->shader, "view_pos", camera->position);
 
@@ -509,7 +511,7 @@ update(App *app)
     app->cube_light.obj.position = glm::vec3(a * x + b, 5.0f, a * z + b);
 
     // glClearColor(0.502f, 0.678f, .996f, 1.0f); // Light sky
-    glClearColor(0.002f, 0.078f, .196f, 1.0f); // Dark sky
+    glClearColor(0.001f, 0.038f, .096f, 1.0f); // Dark sky
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     set_transforms(app, &app->floor);
