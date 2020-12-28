@@ -132,9 +132,9 @@ void Shader_setf(Shader *shader, const char *name, f32 value)
 }
 
 
-void Shader_setv3(Shader *shader, const char *name, f32 x, f32 y, f32 z)
+void Shader_setv3(Shader *shader, const char *name, glm::vec3 v)
 {
-    glUniform3f(glGetUniformLocation(shader->id, name), x, y, z);
+    glUniform3f(glGetUniformLocation(shader->id, name), v.x, v.y, v.z);
 }
 
 

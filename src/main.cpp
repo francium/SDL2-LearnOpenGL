@@ -297,7 +297,7 @@ init_objs(App *app)
         return false;
     }
     app->cube_light.light = {
-        .ambient = glm::vec3 (0.5f, 0.5f, 0.5f),
+        .ambient = glm::vec3 (0.2f, 0.2f, 0.2f),
         .diffuse = glm::vec3 (0.6f, 0.6f, 0.6f),
         .specular = glm::vec3(0.2f, 0.2f, 0.2f),
         .constant = 1.0f,
@@ -373,7 +373,7 @@ render_light(LightObj *light)
 }
 
 internal void
-render_floor(Obj *floor, glm::vec3 view_pos, LightObj *light, Obj *sun)
+render_floor(Obj *floor, Camera *camera, LightObj *light, Obj *sun)
 {
     Shader_use(&floor->shader);
     Texture_use(floor->textures.diffuse, GL_TEXTURE0);
@@ -382,16 +382,17 @@ render_floor(Obj *floor, glm::vec3 view_pos, LightObj *light, Obj *sun)
     Shader_seti(&floor->shader, "material.specular", 1);
     glBindVertexArray(floor->vao);
 
-    Shader_setv3(&floor->shader, "light.position", light->obj.position.x, light->obj.position.y, light->obj.position.z);
-    Shader_setv3(&floor->shader, "light.direction", -light->obj.position.x, -light->obj.position.y, -light->obj.position.z);
-    Shader_setv3(&floor->shader, "light.ambient", light->light.ambient.x, light->light.ambient.y, light->light.ambient.z);
-    Shader_setv3(&floor->shader, "light.diffuse", light->light.diffuse.x, light->light.diffuse.y, light->light.diffuse.z);
-    Shader_setv3(&floor->shader, "light.specular", light->light.specular.x, light->light.specular.y, light->light.specular.z);
+    Shader_setv3(&floor->shader, "light.position", camera->position);
+    Shader_setv3(&floor->shader, "light.direction", camera->front);
+    Shader_setv3(&floor->shader, "light.ambient", light->light.ambient);
+    Shader_setv3(&floor->shader, "light.diffuse", light->light.diffuse);
+    Shader_setv3(&floor->shader, "light.specular", light->light.specular);
     Shader_setf(&floor->shader, "light.constant", light->light.constant);
     Shader_setf(&floor->shader, "light.linear", light->light.linear);
     Shader_setf(&floor->shader, "light.quadratic", light->light.quadratic);
+    Shader_setf(&floor->shader, "light.cut_off", glm::cos(glm::radians(12.5f)));
 
-    Shader_setv3(&floor->shader, "view_pos", view_pos.x, view_pos.y, view_pos.z);
+    Shader_setv3(&floor->shader, "view_pos", camera->position);
 
     Shader_setf(&floor->shader, "material.shine", 2.0f);
 
@@ -421,7 +422,7 @@ render_floor(Obj *floor, glm::vec3 view_pos, LightObj *light, Obj *sun)
 
 
 internal void
-render_objects(Obj *cube, glm::vec3 view_pos, LightObj *light, Obj *sun)
+render_objects(Obj *cube, Camera *camera, LightObj *light, Obj *sun)
 {
     Shader_use(&cube->shader);
     Texture_use(cube->textures.diffuse, GL_TEXTURE0);
@@ -430,16 +431,17 @@ render_objects(Obj *cube, glm::vec3 view_pos, LightObj *light, Obj *sun)
     Shader_seti(&cube->shader, "material.specular", 1);
     glBindVertexArray(cube->vao);
 
-    Shader_setv3(&cube->shader, "light.position", light->obj.position.x, light->obj.position.y, light->obj.position.z);
-    Shader_setv3(&cube->shader, "light.direction", -light->obj.position.x, -light->obj.position.y, -light->obj.position.z);
-    Shader_setv3(&cube->shader, "light.ambient", light->light.ambient.x, light->light.ambient.y, light->light.ambient.z);
-    Shader_setv3(&cube->shader, "light.diffuse", light->light.diffuse.x, light->light.diffuse.y, light->light.diffuse.z);
-    Shader_setv3(&cube->shader, "light.specular", light->light.specular.x, light->light.specular.y, light->light.specular.z);
+    Shader_setv3(&cube->shader, "light.position", camera->position);
+    Shader_setv3(&cube->shader, "light.direction", camera->front);
+    Shader_setv3(&cube->shader, "light.ambient", light->light.ambient);
+    Shader_setv3(&cube->shader, "light.diffuse", light->light.diffuse);
+    Shader_setv3(&cube->shader, "light.specular", light->light.specular);
     Shader_setf(&cube->shader, "light.constant", light->light.constant);
     Shader_setf(&cube->shader, "light.linear", light->light.linear);
     Shader_setf(&cube->shader, "light.quadratic", light->light.quadratic);
+    Shader_setf(&cube->shader, "light.cut_off", glm::cos(glm::radians(12.5f)));
 
-    Shader_setv3(&cube->shader, "view_pos", view_pos.x, view_pos.y, view_pos.z);
+    Shader_setv3(&cube->shader, "view_pos", camera->position);
 
     Shader_setf(&cube->shader, "material.shine", 8.0f);
 
@@ -511,10 +513,10 @@ update(App *app)
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     set_transforms(app, &app->floor);
-    render_floor(&app->floor, app->camera.position, &app->cube_light, &app->sun);
+    render_floor(&app->floor, &app->camera, &app->cube_light, &app->sun);
 
     set_transforms(app, &app->cube);
-    render_objects(&app->cube, app->camera.position, &app->cube_light, &app->sun);
+    render_objects(&app->cube, &app->camera, &app->cube_light, &app->sun);
 
     set_transforms(app, &app->cube_light.obj);
     render_light(&app->cube_light);
