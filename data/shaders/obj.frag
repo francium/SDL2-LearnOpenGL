@@ -9,7 +9,8 @@ struct Material
 
 struct Light
 {
-    vec3 position;
+    vec3 direction;
+
     vec3 ambient;
     vec3 diffuse;
     vec3 specular;
@@ -32,7 +33,7 @@ void main()
 
     // diffuse
     vec3 norm = normalize(normal);
-    vec3 light_dir = normalize(light.position - frag_pos);
+    vec3 light_dir = normalize(-light.direction);
     float diff = max(dot(norm, light_dir), 0.0);
 
     // specular

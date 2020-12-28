@@ -49,6 +49,7 @@ struct Obj
            vbo;
     Shader shader;
     Textures textures;
+    glm::vec3 position;
 };
 
 
@@ -123,6 +124,7 @@ struct App
     Obj            cube,
                    floor;
     LightObj       cube_light;
+    Obj            sun;
 };
 
 
@@ -298,6 +300,19 @@ init_objs(App *app)
         .specular = glm::vec3(0.2f, 0.2f, 0.2f),
     };
 
+    Obj_init(
+        &app->sun,
+        app->vert_shader_path,
+        app->light_frag_shader_path,
+        {}
+    );
+    if (!ok)
+    {
+        fprintf(stderr, "Failed to init sun\n");
+        return false;
+    }
+    app->sun.position = glm::vec3(-50.0f, 50.0f, 50.0f);
+
     return ok;
 }
 
@@ -310,6 +325,26 @@ init(App *app)
     if (!init_objs(app)) return false;
 
     return true;
+}
+
+
+internal void
+render_sun(Obj *sun)
+{
+    Shader_use(&sun->shader);
+    glBindVertexArray(sun->vao);
+
+    glm::mat4 model_matrix = glm::mat4(1.0f);
+    model_matrix = glm::translate(model_matrix, sun->position);
+    model_matrix = glm::translate(model_matrix, glm::vec3(-0.5f, -0.5f, -0.5f));
+    model_matrix = glm::scale(model_matrix, glm::vec3(2.0f, 2.0f, 2.0f));
+    Shader_set_matrix4fv(
+        &sun->shader,
+        "model_matrix",
+        glm::value_ptr(model_matrix)
+    );
+
+    glDrawArrays(GL_TRIANGLES, 0, 36);
 }
 
 
@@ -333,7 +368,7 @@ render_light(LightObj *light)
 }
 
 internal void
-render_floor(Obj *floor, glm::vec3 view_pos, LightObj *light)
+render_floor(Obj *floor, glm::vec3 view_pos, LightObj *light, Obj *sun)
 {
     Shader_use(&floor->shader);
     Texture_use(floor->textures.diffuse, GL_TEXTURE0);
@@ -342,7 +377,7 @@ render_floor(Obj *floor, glm::vec3 view_pos, LightObj *light)
     Shader_seti(&floor->shader, "material.specular", 1);
     glBindVertexArray(floor->vao);
 
-    Shader_setv3(&floor->shader, "light.position", light->light.position.x, light->light.position.y, light->light.position.z);
+    Shader_setv3(&floor->shader, "light.position", -sun->position.x, -sun->position.y, -sun->position.z);
     Shader_setv3(&floor->shader, "light.ambient", light->light.ambient.x, light->light.ambient.y, light->light.ambient.z);
     Shader_setv3(&floor->shader, "light.diffuse", light->light.diffuse.x, light->light.diffuse.y, light->light.diffuse.z);
     Shader_setv3(&floor->shader, "light.specular", light->light.specular.x, light->light.specular.y, light->light.specular.z);
@@ -377,7 +412,7 @@ render_floor(Obj *floor, glm::vec3 view_pos, LightObj *light)
 
 
 internal void
-render_objects(Obj *cube, glm::vec3 view_pos, LightObj *light)
+render_objects(Obj *cube, glm::vec3 view_pos, LightObj *light, Obj *sun)
 {
     Shader_use(&cube->shader);
     Texture_use(cube->textures.diffuse, GL_TEXTURE0);
@@ -386,7 +421,7 @@ render_objects(Obj *cube, glm::vec3 view_pos, LightObj *light)
     Shader_seti(&cube->shader, "material.specular", 1);
     glBindVertexArray(cube->vao);
 
-    Shader_setv3(&cube->shader, "light.position", light->light.position.x, light->light.position.y, light->light.position.z);
+    Shader_setv3(&cube->shader, "light.direction", -sun->position.x, -sun->position.y, -sun->position.z);
     Shader_setv3(&cube->shader, "light.ambient", light->light.ambient.x, light->light.ambient.y, light->light.ambient.z);
     Shader_setv3(&cube->shader, "light.diffuse", light->light.diffuse.x, light->light.diffuse.y, light->light.diffuse.z);
     Shader_setv3(&cube->shader, "light.specular", light->light.specular.x, light->light.specular.y, light->light.specular.z);
@@ -463,13 +498,16 @@ update(App *app)
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     set_transforms(app, &app->floor);
-    render_floor(&app->floor, app->camera.position, &app->cube_light);
+    render_floor(&app->floor, app->camera.position, &app->cube_light, &app->sun);
 
     set_transforms(app, &app->cube);
-    render_objects(&app->cube, app->camera.position, &app->cube_light);
+    render_objects(&app->cube, app->camera.position, &app->cube_light, &app->sun);
 
-    set_transforms(app, &app->cube_light.obj);
-    render_light(&app->cube_light);
+    // set_transforms(app, &app->cube_light.obj);
+    // render_light(&app->cube_light);
+
+    set_transforms(app, &app->sun);
+    render_sun(&app->sun);
 
     SDL_GL_SwapWindow(app->window);
 }
