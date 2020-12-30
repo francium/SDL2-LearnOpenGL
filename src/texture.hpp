@@ -11,6 +11,8 @@
 struct Texture
 {
     GLuint id;
+    const char *type;
+    const char *path;
 };
 
 
@@ -68,3 +70,8 @@ Texture_use(Texture *texture, GLuint unit)
 }
 
 
+internal void
+Texture_cleanup(const Texture *t)
+{
+    glDeleteTextures(1, &t->id);
+}

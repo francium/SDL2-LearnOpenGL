@@ -7,6 +7,10 @@ CXX_FLAGS += -g -O0
 # CXX_FLAGS += -fsanitize=address
 
 
+## Assimp
+LIBS += -L./lib/assimp/bin -lassimp
+
+
 ## SDL2
 LIBS += $$(sdl2-config --libs --cflags)
 
