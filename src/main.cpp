@@ -9,6 +9,7 @@
 
 #include "camera.hpp"
 #include "clock.hpp"
+#include "debug.hpp"
 #include "entity.hpp"
 #include "mesh.hpp"
 #include "model.hpp"
@@ -161,10 +162,17 @@ struct App
     Clock clock;
     Inputs inputs;
     Camera camera;
-    Entity *house;
+
+    LightObj point_lights[point_light_count];
+    LightObj sun;
+    LightObj flashlight;
+
+    Entity *floor;
+    Entity *wedge;
 
     const char *frag_shader_path;
     const char *vert_shader_path;
+    const char *light_frag_shader_path;
     Shader shader;
 };
 
@@ -250,8 +258,97 @@ internal void
 cleanup(App *app)
 {
     cleanup_sdl(app);
-    app->house->cleanup();
-    delete app->house;
+
+    for (u32 i = 0; i < point_light_count; i++)
+        Obj_destroy(&app->point_lights[i].obj);
+    Obj_destroy(&app->sun.obj);
+    Obj_destroy(&app->flashlight.obj);
+
+    app->wedge->cleanup();
+    delete app->wedge;
+
+    app->floor->cleanup();
+    delete app->floor;
+}
+
+
+internal bool
+init_lights(App *app)
+{
+    bool ok;
+
+    glm::vec3 point_light_positions[point_light_count] = {
+        glm::vec3(0.0f, 4.0f, 7.0f),
+        glm::vec3(0.0f, 20.0f, 7.0f),
+        // glm::vec3(-10.0f, 5.0f, -10.0f),
+        // glm::vec3(0.0f, 5.0f, 10.0f),
+        // glm::vec3(10.0f, 5.0f, -10.0f),
+    };
+    for (u32 i = 0; i < point_light_count; i++)
+    {
+        ok = Obj_init(
+            &app->point_lights[i].obj,
+            app->vert_shader_path,
+            app->light_frag_shader_path,
+            {}
+        );
+        if (!ok)
+        {
+            fprintf(stderr, "Failed to init point light %d\n", i);
+            return false;
+        }
+        app->point_lights[i].light.point = {
+            .ambient = glm::vec3 (0.1f, 0.1f, 0.1f),
+            .diffuse = glm::vec3 (0.4f, 0.4f, 0.4f),
+            .specular = glm::vec3(0.3f, 0.3f, 0.3f),
+            .constant = 1.0f,
+            .linear = 0.09f,
+            .quadratic = 0.032f,
+        };
+        app->point_lights[i].obj.position = point_light_positions[i];
+    }
+
+    Obj_init(
+        &app->sun.obj,
+        app->vert_shader_path,
+        app->light_frag_shader_path,
+        {}
+    );
+    if (!ok)
+    {
+        fprintf(stderr, "Failed to init sun\n");
+        return false;
+    }
+    app->sun.obj.position = glm::vec3(-50.0f, 50.0f, 50.0f);
+    app->sun.light.direction.direction = -app->sun.obj.position;
+    app->sun.light.direction.ambient = glm::vec3(0.4f, 0.4f, 0.4f);
+    app->sun.light.direction.diffuse = glm::vec3(0.6f, 0.6f, 0.6f);
+    app->sun.light.direction.specular = glm::vec3(0.3f, 0.3f, 0.3f);
+
+    Obj_init(
+        &app->flashlight.obj,
+        app->vert_shader_path,
+        app->light_frag_shader_path,
+        {}
+    );
+    if (!ok)
+    {
+        fprintf(stderr, "Failed to init flashlight\n");
+        return false;
+    }
+    app->flashlight.obj.position = glm::vec3(0.0f);
+    app->flashlight.light.spot.direction = glm::vec3(0.0f);
+    app->flashlight.light.spot.direction = glm::vec3(0.0f);
+    app->flashlight.light.spot.cut_off = glm::cos(glm::radians(12.5f));
+    app->flashlight.light.spot.outer_cut_off = glm::cos(glm::radians(15.0f));
+    app->flashlight.light.spot.ambient = glm::vec3(0.2f, 0.2f, 0.2f);
+    app->flashlight.light.spot.diffuse = glm::vec3(0.6f, 0.6f, 0.6f);
+    app->flashlight.light.spot.specular = glm::vec3(0.3f, 0.3f, 0.3f);
+    app->flashlight.light.spot.constant = 1.0f;
+    app->flashlight.light.spot.linear = 0.09f;
+    app->flashlight.light.spot.quadratic = 0.032f;
+
+    return true;
 }
 
 
@@ -270,10 +367,16 @@ init_objs(App *app)
         fprintf(stderr, "Failed to init shader\n");
     }
 
-    app->house = new Entity("data/models/winter-scene/", "Low Poly Winter Scene.obj", &app->shader);
+    init_lights(app);
+
+    app->floor = new Entity("data/models/floor/", "floor.obj", &app->shader);
+    // app->wedge = new Entity("data/models/wedge/", "wedge.obj", &app->shader);
+    app->wedge = new Entity("data/models/wedge/", "wedge.obj", &app->shader);
+    app->wedge->scale(glm::vec3(1.5f));
 
     return ok;
 }
+
 
 internal bool
 init(App *app)
@@ -285,6 +388,55 @@ init(App *app)
     return true;
 }
 
+
+internal void
+set_light_uniforms(App *app, Shader *shader, WorldLights *lights)
+{
+    Shader_seti(shader, "enable_sun", app->inputs.enable_sun);
+    Shader_seti(shader, "enable_point_lights", app->inputs.enable_point_lights);
+    Shader_seti(shader, "enable_flashlight", app->inputs.enable_flashlight);
+
+    Shader_setv3(shader, "direction_light.direction", lights->sun.light.direction.direction);
+    Shader_setv3(shader, "direction_light.ambient", lights->sun.light.direction.ambient);
+    Shader_setv3(shader, "direction_light.diffuse", lights->sun.light.direction.diffuse);
+    Shader_setv3(shader, "direction_light.specular", lights->sun.light.direction.specular);
+
+    Shader_setv3(shader, "spot_light.position", lights->flashlight.obj.position);
+    Shader_setv3(shader, "spot_light.direction", lights->flashlight.light.spot.direction);
+    Shader_setf(shader, "spot_light.cut_off", lights->flashlight.light.spot.cut_off);
+    Shader_setf(shader, "spot_light.outer_cut_off", lights->flashlight.light.spot.outer_cut_off);
+    Shader_setv3(shader, "spot_light.ambient", lights->flashlight.light.spot.ambient);
+    Shader_setv3(shader, "spot_light.diffuse", lights->flashlight.light.spot.diffuse);
+    Shader_setv3(shader, "spot_light.specular", lights->flashlight.light.spot.specular);
+    Shader_setf(shader, "spot_light.constant", lights->flashlight.light.spot.constant);
+    Shader_setf(shader, "spot_light.linear", lights->flashlight.light.spot.linear);
+    Shader_setf(shader, "spot_light.quadratic", lights->flashlight.light.spot.quadratic);
+
+    char buf[32];
+    for (u32 i = 0; i < point_light_count; i++)
+    {
+        sprintf(buf, "point_lights[%u].position", i);
+        Shader_setv3(shader, buf, lights->points[i].obj.position);
+
+        sprintf(buf, "point_lights[%u].ambient", i);
+        Shader_setv3(shader, buf, lights->points[i].light.point.ambient);
+
+        sprintf(buf, "point_lights[%u].diffuse", i);
+        Shader_setv3(shader, buf, lights->points[i].light.point.diffuse);
+
+        sprintf(buf, "point_lights[%u].specular", i);
+        Shader_setv3(shader, buf, lights->points[i].light.point.specular);
+
+        sprintf(buf, "point_lights[%u].constant", i);
+        Shader_setf(shader, buf, lights->points[i].light.point.constant);
+
+        sprintf(buf, "point_lights[%u].linear", i);
+        Shader_setf(shader, buf, lights->points[i].light.point.linear);
+
+        sprintf(buf, "point_lights[%u].quadratic", i);
+        Shader_setf(shader, buf, lights->points[i].light.point.quadratic);
+    }
+}
 
 internal void
 update(App *app)
@@ -302,7 +454,19 @@ update(App *app)
         100.0f
     );
 
-    app->house->draw(&transforms);
+    WorldLights lights = {
+        .points = app->point_lights,
+        .sun = app->sun,
+        .flashlight = app->flashlight,
+    };
+
+    Shader_setv3(app->wedge->_shader, "view_pos", app->camera.position);
+    set_light_uniforms(app, app->wedge->_shader, &lights);
+    app->wedge->draw(&transforms);
+
+    Shader_setv3(app->floor->_shader, "view_pos", app->camera.position);
+    set_light_uniforms(app, app->floor->_shader, &lights);
+    app->floor->draw(&transforms);
 
     SDL_GL_SwapWindow(app->window);
 }
@@ -440,6 +604,13 @@ process_events(App *app)
     Camera_process_mouse_motion(&app->camera, mouse_dx, mouse_dy);
     Camera_process_mouse_scroll(&app->camera, mouse_wheel_dy);
 
+    if (app->inputs.flashlight_follow)
+    {
+        app->flashlight.light.spot.direction = app->camera.front;
+        app->flashlight.obj.position = app->camera.position;
+        app->flashlight.obj.position.y -= 0.5f;
+    }
+
     return quit;
 }
 
@@ -452,6 +623,11 @@ main(int argc, char *argv[])
     app.window_height = 768,
     app.frag_shader_path = "data/shaders/model.frag",
     app.vert_shader_path = "data/shaders/vert.vert",
+    app.light_frag_shader_path = "data/shaders/light.frag",
+    app.inputs.enable_sun = true;
+    app.inputs.enable_flashlight = true;
+    app.inputs.flashlight_follow = true;
+    app.inputs.enable_point_lights = true;
     Clock_init(&app.clock);
     Camera_init(&app.camera, default_camera_height, default_fov);
 
@@ -476,7 +652,9 @@ main(int argc, char *argv[])
         update(&app);
 
         if ((++i % 60) == 0)
+        {
             printf("FPS=%.1f\n", 1 / app.clock.dt * 1000);
+        }
     }
 
     fprintf(stderr, "Exiting...\n");

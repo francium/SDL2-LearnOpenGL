@@ -8,47 +8,53 @@
 #include "transforms.hpp"
 
 
+struct EntityTransforms
+{
+    glm::vec3 position;
+    glm::vec3 direction;
+    glm::vec3 rotation;
+    glm::vec3 scale;
+};
+
 struct Entity
 {
-    glm::vec3 _position;
-    glm::vec3 _direction;
+    EntityTransforms _transforms;
     Model _model;
     Shader *_shader;
 
     Entity(const char *model_dir, const char *model_file, Shader *shader)
-        : Entity(model_dir, model_file, shader, glm::vec3(0.0))
-    {}
-
-    Entity(const char *model_dir, const char *model_file, Shader *shader, glm::vec3 position)
-        : Entity(model_dir, model_file, shader, position, glm::vec3(0.0))
-    {}
-
-    Entity(
-        const char *model_dir,
-        const char *model_file,
-        Shader *shader,
-        glm::vec3 position,
-        glm::vec3 direction
-    )
-        : _position(position)
-        , _direction(direction)
-        , _model(model_dir, model_file, false)
+        : _model(model_dir, model_file, false)
         , _shader(shader)
-    {}
-
-    void move_to(glm::vec3 position)
     {
-        this->_position = position;
-    }
-
-    void face_to(glm::vec3 direction)
-    {
-        this->_direction = direction;
+        this->_transforms.position = glm::vec3(0.0f);
+        this->_transforms.direction = glm::vec3(0.0f, 0.0f, 1.0f);
+        this->_transforms.rotation = glm::vec3(0.0f);
+        this->_transforms.scale = glm::vec3(1.0f);
     }
 
     void cleanup()
     {
         this->_model.cleanup();
+    }
+
+    void scale(glm::vec3 scale)
+    {
+        this->_transforms.scale = scale;
+    }
+
+    void rotate(glm::vec3 rotation)
+    {
+        this->_transforms.rotation = rotation;
+    }
+
+    void translate(glm::vec3 position)
+    {
+        this->_transforms.position = position;
+    }
+
+    void face_to(glm::vec3 direction)
+    {
+        this->_transforms.direction = direction;
     }
 
     void draw(Transforms *transforms)
@@ -65,10 +71,17 @@ struct Entity
             "projection_matrix",
             glm::value_ptr(transforms->projection)
         );
+
+        glm::mat4 model_matrix = glm::mat4(1.0f);
+        model_matrix = glm::rotate(model_matrix, this->_transforms.rotation.x, glm::vec3(1.0f, 0.0f, 0.0f));
+        model_matrix = glm::rotate(model_matrix, this->_transforms.rotation.y, glm::vec3(0.0f, 1.0f, 0.0f));
+        model_matrix = glm::rotate(model_matrix, this->_transforms.rotation.z, glm::vec3(0.0f, 0.0f, 1.0f));
+        model_matrix = glm::scale(model_matrix, this->_transforms.scale);
+        model_matrix = glm::translate(model_matrix, this->_transforms.position);
         Shader_set_matrix4fv(
             this->_shader,
             "model_matrix",
-            glm::value_ptr(glm::mat4(1.0))
+            glm::value_ptr(model_matrix)
         );
 
         this->_model.draw(this->_shader);

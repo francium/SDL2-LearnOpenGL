@@ -22,7 +22,7 @@ using namespace std;
 unsigned int textureFromFile(const char *path, const char *directory, bool gamma)
 {
     char filename[256];
-    sprintf(filename, "%s/%s", directory, path);
+    sprintf(filename, "%s%s", directory, path);
 
     unsigned int textureID;
     glGenTextures(1, &textureID);
@@ -224,27 +224,37 @@ private:
         {
             aiString str;
             mat->GetTexture(type, i, &str);
+            const char *cstr = str.C_Str();
+
             // check if texture was loaded before and if so, continue to next iteration: skip loading a new texture
             bool skip = false;
             for(unsigned int j = 0; j < textures_loaded.size(); j++)
             {
-                if(std::strcmp(textures_loaded[j].path, str.C_Str()) == 0)
+                if(std::strcmp(textures_loaded[j].path, cstr) == 0)
                 {
                     textures.push_back(textures_loaded[j]);
                     skip = true; // a texture with the same filepath has already been loaded, continue to next one. (optimization)
+                    printf("Skipping loading of %s%s\n", this->directory, cstr);
                     break;
                 }
             }
+
+            const u32 size = (strlen(cstr) + 1);
+            char *copy = (char *)malloc(sizeof(char) * size);
+            strcpy(copy, cstr);
+
             if(!skip)
             {   // if texture hasn't been loaded already, load it
                 Texture texture;
-                texture.id = textureFromFile(str.C_Str(), this->directory, false);
+                texture.id = textureFromFile(cstr, this->directory, false);
                 texture.type = typeName;
-                texture.path = str.C_Str();
+                texture.path = copy;
                 textures.push_back(texture);
+                printf("Added texture to vector for type %s: %s%s\n", typeName, this->directory, cstr);
                 textures_loaded.push_back(texture);  // store it as texture loaded for entire model, to ensure we won't unnecesery load duplicate textures.
             }
         }
+
         return textures;
     }
 };
