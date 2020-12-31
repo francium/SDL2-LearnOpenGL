@@ -238,6 +238,10 @@ init_gl(App *app)
     }
 
     glEnable(GL_DEPTH_TEST);
+    glDepthFunc(GL_LESS);
+    glEnable(GL_STENCIL_TEST);
+    glStencilFunc(GL_NOTEQUAL, 1, 0xFF);
+    glStencilOp(GL_KEEP, GL_KEEP, GL_REPLACE);
 
     return true;
 }
@@ -419,25 +423,6 @@ init(App *app)
 
 
 internal void
-render_light_obj(LightObj *light, f32 scale)
-{
-    Shader_use(&light->obj.shader);
-    glBindVertexArray(light->obj.vao);
-
-    glm::mat4 model_matrix = glm::mat4(1.0f);
-    model_matrix = glm::translate(model_matrix, light->obj.position);
-    model_matrix = glm::scale(model_matrix, glm::vec3(scale));
-    Shader_set_matrix4fv(
-        &light->obj.shader,
-        "model_matrix",
-        glm::value_ptr(model_matrix)
-    );
-
-    glDrawArrays(GL_TRIANGLES, 0, 36);
-}
-
-
-internal void
 set_light_uniforms(App *app, Shader *shader, WorldLights *lights)
 {
     Shader_seti(shader, "enable_sun", app->inputs.enable_sun);
@@ -488,9 +473,57 @@ set_light_uniforms(App *app, Shader *shader, WorldLights *lights)
 
 
 internal void
+set_transforms(App *app, Shader *shader)
+{
+    // TODO: Without doing a Shader_use (glUseProgram), things don't render
+    // correctly...why?
+
+    Shader_set_matrix4fv(
+        shader,
+        "view_matrix",
+        glm::value_ptr(Camera_toViewMatrix(&app->camera))
+    );
+
+    glm::mat4 projection_matrix = glm::perspective(
+        glm::radians(app->camera.fov),
+        (f32)app->window_width / (f32)app->window_height,
+        0.1f,
+        100.0f
+    );
+    Shader_set_matrix4fv(
+        shader,
+        "projection_matrix",
+        glm::value_ptr(projection_matrix)
+    );
+}
+
+
+internal void
+render_light_obj(LightObj *light, f32 scale)
+{
+    Shader_use(&light->obj.shader);
+    glBindVertexArray(light->obj.vao);
+
+    glm::mat4 model_matrix = glm::mat4(1.0f);
+    model_matrix = glm::translate(model_matrix, light->obj.position);
+    model_matrix = glm::scale(model_matrix, glm::vec3(scale));
+    Shader_set_matrix4fv(
+        &light->obj.shader,
+        "model_matrix",
+        glm::value_ptr(model_matrix)
+    );
+
+    glDrawArrays(GL_TRIANGLES, 0, 36);
+}
+
+
+internal void
 render_floor(App *app, Obj *floor, Camera *camera, WorldLights *lights)
 {
     Shader_use(&floor->shader);
+
+    set_transforms(app, &floor->shader);
+
     glBindVertexArray(floor->vao);
 
     Texture_use(floor->textures.diffuse, GL_TEXTURE0);
@@ -525,13 +558,14 @@ render_floor(App *app, Obj *floor, Camera *camera, WorldLights *lights)
             glDrawArrays(GL_TRIANGLES, 0, 36);
         }
     }
+
+    glBindVertexArray(0);
 }
 
 
 internal void
-render_objects(App *app, Obj *cube, Camera *camera, WorldLights *lights)
+render_objects(App *app, Obj *cube, Camera *camera, WorldLights *lights, glm::vec3 scale, bool outline)
 {
-    Shader_use(&cube->shader);
     glBindVertexArray(cube->vao);
 
     Texture_use(cube->textures.diffuse, GL_TEXTURE0);
@@ -558,6 +592,7 @@ render_objects(App *app, Obj *cube, Camera *camera, WorldLights *lights)
             glm::radians((i % 2 == 0) ? 90.0f * i : 0.0f),
             glm::vec3(1.0f, 0.0f, 1.0f)
         );
+        model_matrix = glm::scale(model_matrix, scale);
         Shader_set_matrix4fv(
             &cube->shader,
             "model_matrix",
@@ -566,33 +601,8 @@ render_objects(App *app, Obj *cube, Camera *camera, WorldLights *lights)
 
         glDrawArrays(GL_TRIANGLES, 0, 36);
     }
-}
 
-
-internal void
-set_transforms(App *app, Obj *obj)
-{
-    // TODO: Without doing a Shader_use (glUseProgram), things don't render
-    // correctly...why?
-    Shader_use(&obj->shader);
-
-    Shader_set_matrix4fv(
-        &obj->shader,
-        "view_matrix",
-        glm::value_ptr(Camera_toViewMatrix(&app->camera))
-    );
-
-    glm::mat4 projection_matrix = glm::perspective(
-        glm::radians(app->camera.fov),
-        (f32)app->window_width / (f32)app->window_height,
-        0.1f,
-        100.0f
-    );
-    Shader_set_matrix4fv(
-        &obj->shader,
-        "projection_matrix",
-        glm::value_ptr(projection_matrix)
-    );
+    glBindVertexArray(0);
 }
 
 
@@ -613,33 +623,50 @@ update(App *app)
         .flashlight = app->flashlight,
     };
 
+    glEnable(GL_DEPTH_TEST);
+    glStencilOp(GL_KEEP, GL_KEEP, GL_REPLACE);
+
     // glClearColor(0.502f, 0.678f, .996f, 1.0f); // Light sky
     glClearColor(0.001f, 0.038f, .096f, 1.0f); // Dark sky
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 
-    set_transforms(app, &app->floor);
+    glStencilMask(0x00); // don't update stencil buffer while drawing floor
     render_floor(app, &app->floor, &app->camera, &lights);
 
-    set_transforms(app, &app->cube);
-    render_objects(app, &app->cube, &app->camera, &lights);
+    glStencilFunc(GL_ALWAYS, 1, 0xff);
+    glStencilMask(0xff);
+    Shader_use(&app->cube.shader);
+    set_transforms(app, &app->sun.obj.shader);
+    render_objects(app, &app->cube, &app->camera, &lights, glm::vec3(1.0f), false);
+
+    glStencilFunc(GL_NOTEQUAL, 1, 0xff);
+    glStencilMask(0x00);
+    glDisable(GL_DEPTH_TEST);
+    Shader_use(&app->sun.obj.shader);
+    set_transforms(app, &app->sun.obj.shader);
+    render_objects(app, &app->cube, &app->camera, &lights, glm::vec3(1.1f), true);
+
+    glStencilMask(0xff);
+    glStencilFunc(GL_ALWAYS, 0, 0xff);
+    glEnable(GL_DEPTH_TEST);
 
     if (app->inputs.enable_point_lights)
         for (u32 i = 0; i < point_light_count; i++)
         {
             LightObj *light = &app->point_lights[i];
-            set_transforms(app, &light->obj);
+            set_transforms(app, &light->obj.shader);
             render_light_obj(light, 0.5);
         }
 
     if (app->inputs.enable_sun)
     {
-        set_transforms(app, &app->sun.obj);
+        set_transforms(app, &app->sun.obj.shader);
         render_light_obj(&app->sun, 2.0f);
     }
 
     if (!app->inputs.flashlight_follow && app->inputs.enable_flashlight)
     {
-        set_transforms(app, &app->flashlight.obj);
+        set_transforms(app, &app->flashlight.obj.shader);
         render_light_obj(&app->flashlight, 0.25f);
     }
 
